@@ -44,21 +44,36 @@ fi
 
 ok "Using $($PYTHON --version)"
 
-# ── 2. Python packages ──────────────────────────────
+# ── 2. Virtual environment ──────────────────────────
+VENV_DIR="$SCRIPT_DIR/venv"
+
+if [ ! -d "$VENV_DIR" ]; then
+    log "Creating virtual environment..."
+    $PYTHON -m venv "$VENV_DIR"
+    ok "Virtual environment created at $VENV_DIR"
+else
+    ok "Virtual environment already exists"
+fi
+
+# Use the venv's python and pip from here on
+VENV_PYTHON="$VENV_DIR/bin/python"
+VENV_PIP="$VENV_DIR/bin/pip"
+
+# ── 3. Python packages ──────────────────────────────
 log "Installing Python packages from requirements.txt..."
 
+$VENV_PIP install --upgrade pip -q
+
 if [ -f requirements.txt ]; then
-    $PYTHON -m pip install --upgrade pip -q
-    $PYTHON -m pip install -r requirements.txt -q
+    $VENV_PIP install -r requirements.txt -q
     ok "Python packages installed"
 else
     warn "No requirements.txt found — installing core deps directly..."
-    $PYTHON -m pip install --upgrade pip -q
-    $PYTHON -m pip install flask -q
+    $VENV_PIP install flask -q
     ok "Flask installed"
 fi
 
-# ── 3. AtomicCards data file ────────────────────────
+# ── 4. AtomicCards data file ────────────────────────
 ATOMIC_FILE="AtomicCards.json.gz"
 ATOMIC_URL="https://mtgjson.com/api/v5/AtomicCards.json.gz"
 
@@ -96,7 +111,7 @@ if [ ! -f "$ATOMIC_FILE" ]; then
     fi
 fi
 
-# ── 4. Build database if needed ─────────────────────
+# ── 5. Build database if needed ─────────────────────
 DB_FILE="momir.db"
 
 log "Checking database: $DB_FILE"
@@ -125,7 +140,7 @@ if [ "$NEED_BUILD" = true ]; then
     fi
 
     log "Running build_momir_db.py..."
-    $PYTHON build_momir_db.py
+    $VENV_PYTHON build_momir_db.py
     echo ""
 
     if [ -f "$DB_FILE" ]; then
@@ -138,7 +153,7 @@ else
     ok "Database is up to date ($(du -h "$DB_FILE" | cut -f1))"
 fi
 
-# ── 5. Launch web server ────────────────────────────
+# ── 6. Launch web server ────────────────────────────
 echo ""
 log "Starting Momir Vig web server..."
 echo "───────────────────────────────────────────────"
@@ -148,4 +163,4 @@ echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop"
 echo "───────────────────────────────────────────────"
 echo ""
 
-exec $PYTHON momir_app.py
+exec $VENV_PYTHON momir_app.py
