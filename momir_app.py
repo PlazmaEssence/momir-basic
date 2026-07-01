@@ -126,7 +126,7 @@ def get_random_creature(cmc: int):
     cur = con.cursor()
     cur.execute("""
         SELECT name, mana_value, type_line, subtypes, oracle_text,
-               power, toughness, scryfall_id
+               power, toughness, image_url
         FROM creatures
         WHERE CAST(mana_value AS INTEGER) = ?
         ORDER BY RANDOM()
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Momir Vig Web App")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=5000, help="Port to bind to")
+    parser.add_argument("--port", type=int, default=5001, help="Port to bind to")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
 
