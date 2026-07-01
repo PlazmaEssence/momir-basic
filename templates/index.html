@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Momir Vig Paper Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0e0f13;
+    --surface:   #16181f;
+    --surface2:  #1e2029;
+    --border:    rgba(255,255,255,0.08);
+    --border2:   rgba(255,255,255,0.14);
+    --text:      #e8e6df;
+    --muted:     #8a8880;
+    --faint:     #3a3a40;
+
+    --gold:      #c9a84c;
+    --gold-dim:  #7a5f24;
+    --gold-bg:   rgba(201,168,76,0.10);
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    height: 64px;
+    background: var(--surface);
+  }
+
+  .logo-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    background: var(--gold-bg);
+    border: 1px solid var(--gold-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .logo-mark svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--gold);
+  }
+
+  .logo-text {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .logo-text:hover {
+    color: var(--gold);
+  }
+
+  header .sub {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 4rem;
+  }
+
+  .intro {
+    margin-bottom: 2rem;
+  }
+
+  .intro h1 {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .intro p {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .cmc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 10px;
+    margin-bottom: 2rem;
+  }
+
+  .cmc-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .cmc-btn:hover {
+    border-color: var(--gold-dim);
+    background: var(--gold-bg);
+    transform: translateY(-2px);
+  }
+
+  .cmc-btn:active {
+    transform: scale(0.97);
+  }
+
+  .cmc-value {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--gold);
+    font-family: 'Crimson Pro', serif;
+  }
+
+  .cmc-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    margin-top: 4px;
+  }
+
+  .cmc-count {
+    font-size: 10px;
+    color: var(--faint);
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 2px;
+  }
+
+  .result-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    min-height: 200px;
+  }
+
+  .result-empty {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    padding: 3rem 0;
+  }
+
+  .card-display {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+
+  .card-image {
+    width: 265px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+  }
+
+  .card-info {
+    flex: 1;
+  }
+
+  .card-name {
+    font-family: 'Crimson Pro', serif;
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .card-type {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .card-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+  }
+
+  .card-stats {
+    font-size: 14px;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 1rem;
+  }
+
+  .btn {
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 20px;
+    border-radius: var(--radius-md);
+    border: 1px solid;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .btn:active { transform: scale(0.97); }
+
+  .btn-gold {
+    background: var(--gold-bg);
+    border-color: var(--gold-dim);
+    color: var(--gold);
+  }
+
+  .btn-gold:hover { background: rgba(201,168,76,0.18); border-color: var(--gold); }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--muted);
+  }
+
+  .btn-ghost:hover { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+
+  /* ── Tooltip ── */
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+  }
+
+  #tooltip img {
+    width: 215px;
+    border-radius: 12px;
+    border: 1px solid var(--border2);
+    display: block;
+    background: var(--surface2);
+  }
+
+  #tooltip .tip-spinner {
+    width: 215px;
+    height: 300px;
+    border-radius: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  .spinner-ring {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--faint);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 680px) {
+    .card-display { flex-direction: column; align-items: center; }
+    .card-image { width: 200px; }
+    main { padding: 1.5rem 1rem 3rem; }
+    header { padding: 0 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+  </div>
+  <!-- Momir Vig text with hover tooltip -->
+  <span class="logo-text"
+        data-name="Momir Vig, Simic Visionary"
+        onmouseenter="showTip(event, this.dataset.name)"
+        onmouseleave="hideTip()">
+    Momir Vig
+  </span>
+  <span class="sub">Paper Simulator · Scryfall powered</span>
+</header>
+
+<main>
+  <div class="intro">
+    <h1>Summon a random creature</h1>
+    <p>Pick a mana value (CMC) to create a random creature token with that CMC.</p>
+  </div>
+
+  <!-- CMC buttons (populated by server) -->
+  <div class="cmc-grid" id="cmc-grid">
+    <!-- Will be filled from /api/counts -->
+  </div>
+
+  <!-- Result area -->
+  <div class="result-area" id="result">
+    <div class="result-empty">Select a CMC to begin</div>
+  </div>
+
+  <!-- Tooltip container -->
+  <div id="tooltip">
+    <div class="tip-spinner" id="tip-spinner">
+      <div class="spinner-ring"></div> Loading…
+    </div>
+    <img id="tip-img" style="display:none" alt="Card preview">
+  </div>
+</main>
+
+<script>
+  // ── Tooltip functions ──
+  const tooltip = document.getElementById('tooltip');
+  const tipImg = document.getElementById('tip-img');
+  const tipSpinner = document.getElementById('tip-spinner');
+
+  function showTip(event, cardName) {
+    const x = event.clientX + 16;
+    const y = event.clientY + 16;
+    tooltip.style.display = 'block';
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+
+    tipSpinner.style.display = 'flex';
+    tipImg.style.display = 'none';
+
+    // Use Scryfall direct image endpoint
+    const imageUrl = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardName)}&format=image&version=large`;
+    tipImg.src = imageUrl;
+    tipImg.onload = () => {
+      tipSpinner.style.display = 'none';
+      tipImg.style.display = 'block';
+    };
+    tipImg.onerror = () => {
+      tipSpinner.textContent = 'Image not available';
+    };
+  }
+
+  function hideTip() {
+    tooltip.style.display = 'none';
+    tipImg.src = '';
+    tipSpinner.style.display = 'flex';
+    tipSpinner.innerHTML = '<div class="spinner-ring"></div> Loading…';
+  }
+
+  // ── Load CMC counts and build buttons ──
+  async function loadCounts() {
+    try {
+      const resp = await fetch('/api/counts');
+      const counts = await resp.json();
+      const grid = document.getElementById('cmc-grid');
+      grid.innerHTML = '';
+      for (const [cmc, count] of Object.entries(counts)) {
+        const btn = document.createElement('div');
+        btn.className = 'cmc-btn';
+        btn.dataset.cmc = cmc;
+        btn.onclick = () => fetchCreature(parseInt(cmc));
+        btn.innerHTML = `
+          <div class="cmc-value">${cmc}</div>
+          <div class="cmc-label">CMC</div>
+          <div class="cmc-count">${count} cards</div>
+        `;
+        grid.appendChild(btn);
+      }
+    } catch (err) {
+      console.error('Failed to load counts:', err);
+    }
+  }
+
+  // ── Fetch a random creature ──
+  async function fetchCreature(cmc) {
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = '<div class="result-empty"><div class="spinner-ring"></div> Summoning…</div>';
+
+    try {
+      const resp = await fetch(`/api/random/${cmc}`);
+      if (!resp.ok) {
+        const err = await resp.json();
+        resultDiv.innerHTML = `<div class="result-empty">${err.error}</div>`;
+        return;
+      }
+      const card = await resp.json();
+      displayCard(card);
+    } catch (err) {
+      resultDiv.innerHTML = '<div class="result-empty">Network error</div>';
+    }
+  }
+
+  function displayCard(card) {
+    const resultDiv = document.getElementById('result');
+    const imageUrl = card.image_url || '';
+    const stats = card.power && card.toughness ? `${card.power}/${card.toughness}` : '';
+
+    resultDiv.innerHTML = `
+      <div class="card-display">
+        <div>
+          ${imageUrl ? `<img class="card-image" src="${imageUrl}" alt="${card.name}">` : '<div class="card-image" style="height:265px; display:flex; align-items:center; justify-content:center; color:var(--faint);">No image</div>'}
+        </div>
+        <div class="card-info">
+          <div class="card-name">${card.name}</div>
+          <div class="card-type">${card.type_line}</div>
+          ${card.oracle_text ? `<div class="card-text">${card.oracle_text}</div>` : ''}
+          ${stats ? `<div class="card-stats">${stats}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Init ──
+  loadCounts();
+</script>
+</body>
+</html>

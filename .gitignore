@@ -1,0 +1,3 @@
+AtomicCards.json.gz
+*.db
+__pycache__/

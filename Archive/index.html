@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTG Deck Diff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0e0f13;
+    --surface:   #16181f;
+    --surface2:  #1e2029;
+    --border:    rgba(255,255,255,0.08);
+    --border2:   rgba(255,255,255,0.14);
+    --text:      #e8e6df;
+    --muted:     #8a8880;
+    --faint:     #3a3a40;
+
+    --gold:      #c9a84c;
+    --gold-dim:  #7a5f24;
+    --gold-bg:   rgba(201,168,76,0.10);
+
+    --red:       #e05c5c;
+    --red-dim:   #7a2a2a;
+    --red-bg:    rgba(224,92,92,0.10);
+    --red-border:rgba(224,92,92,0.25);
+
+    --green:     #5cb87a;
+    --green-dim: #2a6640;
+    --green-bg:  rgba(92,184,122,0.10);
+    --green-border:rgba(92,184,122,0.25);
+
+    --blue:      #6ea8e0;
+    --blue-dim:  #2a4a72;
+    --blue-bg:   rgba(110,168,224,0.10);
+    --blue-border:rgba(110,168,224,0.25);
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    height: 64px;
+    background: var(--surface);
+  }
+
+  .logo-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    background: var(--gold-bg);
+    border: 1px solid var(--gold-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .logo-mark svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--gold);
+  }
+
+  .logo-text {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.01em;
+  }
+
+  .logo-text span {
+    color: var(--gold);
+  }
+
+  header .sub {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+
+  /* ── Layout ── */
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 4rem;
+  }
+
+  .intro {
+    margin-bottom: 2rem;
+  }
+
+  .intro h1 {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .intro p {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  /* ── Input section ── */
+  .input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 1.25rem;
+  }
+
+  .input-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .input-panel:focus-within {
+    border-color: var(--border2);
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .panel-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-r { background: var(--red); box-shadow: 0 0 6px rgba(224,92,92,0.5); }
+  .dot-g { background: var(--green); box-shadow: 0 0 6px rgba(92,184,122,0.5); }
+
+  .panel-header label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: default;
+  }
+
+  .panel-header .card-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--faint);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  textarea {
+    display: block;
+    width: 100%;
+    height: 220px;
+    resize: vertical;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    padding: 14px 16px;
+  }
+
+  textarea::placeholder {
+    color: var(--faint);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Buttons ── */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 2rem;
+  }
+
+  .btn {
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 20px;
+    border-radius: var(--radius-md);
+    border: 1px solid;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .btn:active { transform: scale(0.97); }
+
+  .btn-gold {
+    background: var(--gold-bg);
+    border-color: var(--gold-dim);
+    color: var(--gold);
+  }
+
+  .btn-gold:hover { background: rgba(201,168,76,0.18); border-color: var(--gold); }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--muted);
+  }
+
+  .btn-ghost:hover { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+
+  /* ── Summary stats ── */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 2rem;
+  }
+
+  .stat {
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    border: 1px solid;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stat-r { background: var(--red-bg); border-color: var(--red-border); }
+  .stat-a { background: var(--green-bg); border-color: var(--green-border); }
+  .stat-s { background: var(--blue-bg); border-color: var(--blue-border); }
+
+  .stat-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .stat-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+
+  .stat-r .stat-icon { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .stat-a .stat-icon { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+  .stat-s .stat-icon { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+
+  .stat-num {
+    font-size: 32px;
+    font-weight: 600;
+    font-family: 'Crimson Pro', Georgia, serif;
+    line-height: 1;
+  }
+
+  .stat-r .stat-num { color: var(--red); }
+  .stat-a .stat-num { color: var(--green); }
+  .stat-s .stat-num { color: var(--blue); }
+
+  .stat-lbl {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+
+  /* ── Card sections ── */
+  .section {
+    margin-bottom: 1.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .icon-r { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .icon-a { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+  .icon-s { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .section-meta {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .cards-wrap {
+    padding: 16px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* ── Pills ── */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 99px;
+    font-size: 12.5px;
+    font-weight: 500;
+    border: 1px solid;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: filter 0.15s, transform 0.1s;
+    position: relative;
+  }
+
+  .pill:hover { filter: brightness(1.2); transform: translateY(-1px); }
+  .pill:active { transform: scale(0.97) translateY(0); }
+
+  .pill-r { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+  .pill-a { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+  .pill-s { background: var(--blue-bg); color: var(--blue); border-color: var(--blue-border); }
+
+  .pill-qty {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 99px;
+    background: rgba(255,255,255,0.07);
+    letter-spacing: 0.02em;
+  }
+
+  .pill-link-icon {
+    font-size: 10px;
+    opacity: 0.45;
+  }
+
+  .btn-dl {
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    margin-left: 8px;
+  }
+  .btn-dl:hover { background: var(--surface); border-color: var(--border2); color: var(--text); }
+  .btn-dl:active { transform: scale(0.96); }
+
+  .empty-state {
+    padding: 16px 20px;
+    font-size: 13px;
+    color: var(--faint);
+    font-style: italic;
+  }
+
+  /* ── Tooltip ── */
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+  }
+
+  #tooltip img {
+    width: 215px;
+    border-radius: 12px;
+    border: 1px solid var(--border2);
+    display: block;
+    background: var(--surface2);
+  }
+
+  #tooltip .tip-spinner {
+    width: 215px;
+    height: 300px;
+    border-radius: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  .spinner-ring {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--faint);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .btn-upload {
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 9px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    margin-left: 6px;
+  }
+  .btn-upload:hover { background: var(--surface); border-color: var(--border2); color: var(--text); }
+  .btn-upload:active { transform: scale(0.96); }
+
+  .input-panel.drag-over {
+    border-color: var(--gold);
+    background: var(--gold-bg);
+  }
+  .input-panel.drag-over textarea {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  /* ── Error ── */
+  .error-box {
+    background: rgba(201,168,76,0.08);
+    border: 1px solid var(--gold-dim);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--gold);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 680px) {
+    .input-grid { grid-template-columns: 1fr; }
+    .stat-row { grid-template-columns: 1fr; }
+    main { padding: 1.5rem 1rem 3rem; }
+    header { padding: 0 1rem; }
+  }
+
+  /* ── Divider ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0.5rem 0 2rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+  </div>
+  <span class="logo-text">Deck <span>Diff</span></span>
+  <span class="sub">MTG · Scryfall powered</span>
+</header>
+
+<main>
+  <div class="intro">
+    <h1>What needs to change?</h1>
+    <p>Paste both lists below. Cards are matched by name only — set and edition are ignored. Hover any result to preview the card.</p>
+  </div>
+
+  <div class="input-grid">
+    <div class="input-panel" id="panel-current" ondragover="onDragOver(event,'current')" ondragleave="onDragLeave('current')" ondrop="onDrop(event,'current')">
+      <div class="panel-header">
+        <span class="panel-dot dot-r"></span>
+        <label for="current">Current deck</label>
+        <span class="card-count" id="cur-count"></span>
+        <button class="btn-upload" onclick="document.getElementById('file-current').click()" title="Upload a text file">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload
+        </button>
+        <input type="file" id="file-current" accept=".txt,.text,text/plain" style="display:none" onchange="loadFile(event,'current')">
+      </div>
+      <textarea id="current"
+        placeholder="// COMMANDER&#10;1 Atraxa, Praetors' Voice (2XM) 190&#10;1 Sol Ring (CMR) 317&#10;1 Command Tower (ELD) 333&#10;...&#10;&#10;Or drag &amp; drop a .txt file here"
+        oninput="liveCount('current','cur-count')"></textarea>
+    </div>
+    <div class="input-panel" id="panel-target" ondragover="onDragOver(event,'target')" ondragleave="onDragLeave('target')" ondrop="onDrop(event,'target')">
+      <div class="panel-header">
+        <span class="panel-dot dot-g"></span>
+        <label for="target">Target deck</label>
+        <span class="card-count" id="tgt-count"></span>
+        <button class="btn-upload" onclick="document.getElementById('file-target').click()" title="Upload a text file">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload
+        </button>
+        <input type="file" id="file-target" accept=".txt,.text,text/plain" style="display:none" onchange="loadFile(event,'target')">
+      </div>
+      <textarea id="target"
+        placeholder="// COMMANDER&#10;1 Atraxa, Praetors' Voice (2XM) 190&#10;1 Brainstorm (EMA) 40&#10;1 Force of Will (EMA) 52&#10;...&#10;&#10;Or drag &amp; drop a .txt file here"
+        oninput="liveCount('target','tgt-count')"></textarea>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-gold" onclick="runDiff()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/><line x1="12" y1="9" x2="12" y2="21"/><path d="M6 9l6-6 6 6"/></svg>
+      Compare decks
+    </button>
+    <button class="btn btn-ghost" onclick="clearAll()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.99"/></svg>
+      Clear
+    </button>
+  </div>
+
+  <div id="err-box" style="display:none"></div>
+  <div id="results" style="display:none">
+    <div class="stat-row">
+      <div class="stat stat-r">
+        <div class="stat-top">
+          <div class="stat-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </div>
+        </div>
+        <div class="stat-num" id="n-remove">0</div>
+        <div class="stat-lbl">cards to remove</div>
+      </div>
+      <div class="stat stat-a">
+        <div class="stat-top">
+          <div class="stat-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </div>
+        </div>
+        <div class="stat-num" id="n-add">0</div>
+        <div class="stat-lbl">cards to add</div>
+      </div>
+      <div class="stat stat-s">
+        <div class="stat-top">
+          <div class="stat-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="stat-num" id="n-stay">0</div>
+        <div class="stat-lbl">cards staying in</div>
+      </div>
+    </div>
+
+    <div class="section" id="sec-remove">
+      <div class="section-head">
+        <div class="section-icon icon-r">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </div>
+        <span class="section-title">Remove from deck</span>
+        <span class="section-meta" id="c-remove"></span>
+        <button class="btn-dl" onclick="downloadList('remove')" title="Download as text file">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+      <div id="list-remove"></div>
+    </div>
+
+    <div class="section" id="sec-add">
+      <div class="section-head">
+        <div class="section-icon icon-a">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </div>
+        <span class="section-title">Add to deck</span>
+        <span class="section-meta" id="c-add"></span>
+        <button class="btn-dl" onclick="downloadList('add')" title="Download as text file">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+      <div id="list-add"></div>
+    </div>
+
+    <div class="section" id="sec-stay">
+      <div class="section-head">
+        <div class="section-icon icon-s">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <span class="section-title">No change needed</span>
+        <span class="section-meta" id="c-stay"></span>
+        <button class="btn-dl" onclick="downloadList('stay')" title="Download as text file">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+      <div id="list-stay"></div>
+    </div>
+  </div>
+</main>
+
+<div id="tooltip">
+  <div class="tip-spinner" id="tip-spinner"><div class="spinner-ring"></div> Loading…</div>
+  <img id="tip-img" style="display:none" alt="">
+</div>
+
+<script>
+  /* ── File upload & drag-drop ── */
+  function loadFile(e, taId) {
+    const file = e.target.files[0];
+    if (!file) return;
+    readFile(file, taId);
+    e.target.value = ''; // reset so same file can be re-uploaded
+  }
+
+  function readFile(file, taId) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      document.getElementById(taId).value = ev.target.result;
+      const countId = taId === 'current' ? 'cur-count' : 'tgt-count';
+      liveCount(taId, countId);
+    };
+    reader.readAsText(file);
+  }
+
+  function onDragOver(e, taId) {
+    e.preventDefault();
+    document.getElementById('panel-' + taId).classList.add('drag-over');
+  }
+
+  function onDragLeave(taId) {
+    document.getElementById('panel-' + taId).classList.remove('drag-over');
+  }
+
+  function onDrop(e, taId) {
+    e.preventDefault();
+    document.getElementById('panel-' + taId).classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) readFile(file, taId);
+  }
+
+  /* ── Live count ── */
+  function liveCount(taId, countId) {
+    const raw = document.getElementById(taId).value;
+    const n = parse(raw);
+    const total = Object.values(n).reduce((a, x) => a + x.qty, 0);
+    const el = document.getElementById(countId);
+    el.textContent = total > 0 ? total + ' cards' : '';
+  }
+
+  /* ── Parser — name only key ── */
+  function parse(raw) {
+    const map = {};
+    raw.split('\n').forEach(line => {
+      line = line.trim();
+      if (!line || line.startsWith('//') || line.startsWith('#')) return;
+
+      // Try full format: 1 Card Name (SET) 123
+      const full = line.match(/^(\d+)\s+(.+?)\s+\([A-Za-z0-9]+\)(\s+\d+[a-z]?)?$/);
+      if (full) {
+        const qty = parseInt(full[1]);
+        const name = full[2].trim();
+        const key = name.toLowerCase();
+        if (map[key]) map[key].qty += qty;
+        else map[key] = { name, qty };
+        return;
+      }
+
+      // Try qty + name
+      const m = line.match(/^(\d+)\s*[xX]?\s+(.+)$/);
+      if (m) {
+        const qty = parseInt(m[1]);
+        const name = m[2].trim()
+          .replace(/\s+\([A-Za-z0-9]+\)(\s+\d+[a-z]?)?$/, '') // strip trailing (SET) or (SET) 123
+          .trim();
+        const key = name.toLowerCase();
+        if (map[key]) map[key].qty += qty;
+        else map[key] = { name, qty };
+        return;
+      }
+
+      // Bare name
+      const name = line.replace(/\s+\([A-Za-z0-9]+\)(\s+\d+[a-z]?)?$/, '').trim();
+      if (name) {
+        const key = name.toLowerCase();
+        if (map[key]) map[key].qty += 1;
+        else map[key] = { name, qty: 1 };
+      }
+    });
+    return map;
+  }
+
+  /* ── Scryfall URL ── */
+  function sfUrl(name) {
+    return `https://scryfall.com/search?q=!%22${encodeURIComponent(name)}%22`;
+  }
+
+  /* ── Pill ── */
+  function pill(name, qty, cls) {
+    const q = qty > 1 ? `<span class="pill-qty">${qty}×</span>` : '';
+    const linkSvg = `<svg class="pill-link-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+    return `<a class="pill ${cls}" href="${sfUrl(name)}" target="_blank" rel="noopener"
+      data-name="${name.replace(/"/g, '&quot;')}"
+      onmouseenter="showTip(event, this.dataset.name)"
+      onmouseleave="hideTip()">${q}${name}${linkSvg}</a>`;
+  }
+
+  /* ── Fill section ── */
+  function fill(list, cls, countId, listId) {
+    const cnt = document.getElementById(countId);
+    const box = document.getElementById(listId);
+    const total = list.reduce((a, x) => a + x.qty, 0);
+    if (!list.length) {
+      box.innerHTML = '<div class="empty-state">None</div>';
+      cnt.textContent = '0';
+      return;
+    }
+    cnt.textContent = `${list.length} type${list.length !== 1 ? 's' : ''} · ${total} card${total !== 1 ? 's' : ''}`;
+    box.innerHTML = `<div class="cards-wrap">${list.map(c => pill(c.name, c.qty, cls)).join('')}</div>`;
+  }
+
+  /* ── Diff ── */
+  function runDiff() {
+    document.getElementById('err-box').style.display = 'none';
+    const c = parse(document.getElementById('current').value);
+    const t = parse(document.getElementById('target').value);
+
+    if (!Object.keys(c).length && !Object.keys(t).length) {
+      const eb = document.getElementById('err-box');
+      eb.innerHTML = `<div class="error-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Paste at least one card list to compare.</div>`;
+      eb.style.display = 'block';
+      return;
+    }
+
+    const all = new Set([...Object.keys(c), ...Object.keys(t)]);
+    const rem = [], add = [], stay = [];
+
+    all.forEach(k => {
+      const cv = c[k], tv = t[k];
+      if (cv && !tv) rem.push({ ...cv });
+      else if (!cv && tv) add.push({ ...tv });
+      else if (cv && tv) {
+        if (cv.qty > tv.qty) { rem.push({ ...cv, qty: cv.qty - tv.qty }); stay.push({ ...cv, qty: tv.qty }); }
+        else if (cv.qty < tv.qty) { add.push({ ...tv, qty: tv.qty - cv.qty }); stay.push({ ...cv, qty: cv.qty }); }
+        else stay.push({ ...cv });
+      }
+    });
+
+    const s = (a, b) => a.name.localeCompare(b.name);
+    rem.sort(s); add.sort(s); stay.sort(s);
+
+    // Store for download
+    window._diffLists = { remove: rem, add, stay };
+
+    document.getElementById('n-remove').textContent = rem.reduce((a, x) => a + x.qty, 0);
+    document.getElementById('n-add').textContent = add.reduce((a, x) => a + x.qty, 0);
+    document.getElementById('n-stay').textContent = stay.reduce((a, x) => a + x.qty, 0);
+
+    fill(rem, 'pill-r', 'c-remove', 'list-remove');
+    fill(add, 'pill-a', 'c-add', 'list-add');
+    fill(stay, 'pill-s', 'c-stay', 'list-stay');
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function downloadList(type) {
+    const lists = window._diffLists;
+    if (!lists || !lists[type] || !lists[type].length) return;
+    const labels = { remove: 'remove', add: 'add', stay: 'keep' };
+    const lines = lists[type].map(c => `${c.qty} ${c.name}`).join('\n');
+    const blob = new Blob([lines], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `deck-diff-${labels[type]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function clearAll() {
+    document.getElementById('current').value = '';
+    document.getElementById('target').value = '';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('err-box').style.display = 'none';
+    document.getElementById('cur-count').textContent = '';
+    document.getElementById('tgt-count').textContent = '';
+    hideTip();
+  }
+
+  /* ── Tooltip / hover preview ── */
+  const tooltip = document.getElementById('tooltip');
+  const tipImg = document.getElementById('tip-img');
+  const tipSpinner = document.getElementById('tip-spinner');
+  const imgCache = {};
+  let hideTimer = null;
+
+  function showTip(e, name) {
+    clearTimeout(hideTimer);
+    tipImg.style.display = 'none';
+    tipSpinner.style.display = 'flex';
+    tooltip.style.display = 'block';
+    posTip(e);
+
+    const key = name.toLowerCase();
+    if (imgCache[key]) {
+      setImg(imgCache[key]);
+      return;
+    }
+
+    fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`)
+      .then(r => r.json())
+      .then(data => {
+        let url = null;
+        if (data.image_uris) url = data.image_uris.normal;
+        else if (data.card_faces && data.card_faces[0].image_uris) url = data.card_faces[0].image_uris.normal;
+        if (url) { imgCache[key] = url; setImg(url); }
+        else tipSpinner.style.display = 'none';
+      })
+      .catch(() => { tipSpinner.style.display = 'none'; });
+  }
+
+  function setImg(url) {
+    tipImg.src = url;
+    tipImg.onload = () => { tipSpinner.style.display = 'none'; tipImg.style.display = 'block'; };
+  }
+
+  function posTip(e) {
+    const w = 225, h = 314, pad = 16;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let x = e.clientX + pad, y = e.clientY - h / 2;
+    if (x + w > vw - pad) x = e.clientX - w - pad;
+    if (y < pad) y = pad;
+    if (y + h > vh - pad) y = vh - h - pad;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+
+  function hideTip() {
+    hideTimer = setTimeout(() => {
+      tooltip.style.display = 'none';
+      tipImg.style.display = 'none';
+    }, 150);
+  }
+
+  document.addEventListener('mousemove', e => {
+    if (tooltip.style.display === 'block') posTip(e);
+  });
+</script>
+</body>
+</html>
