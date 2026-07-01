@@ -44,7 +44,103 @@ fi
 
 ok "Using $($PYTHON --version)"
 
-# ── 2. Virtual environment ──────────────────────────
+# ── 2. Raspberry Pi auto-start setup ────────────────
+IS_PI=false
+PI_MODEL=""
+
+# Detect Raspberry Pi via multiple methods
+if [ -f /proc/cpuinfo ]; then
+    if grep -qi "Raspberry Pi" /proc/cpuinfo 2>/dev/null; then
+        IS_PI=true
+    fi
+fi
+
+if [ "$IS_PI" = false ] && [ -f /sys/firmware/devicetree/base/model ]; then
+    PI_MODEL_RAW=$(tr -d '\0' < /sys/firmware/devicetree/base/model 2>/dev/null || true)
+    if echo "$PI_MODEL_RAW" | grep -qi "Raspberry Pi"; then
+        IS_PI=true
+        PI_MODEL="$PI_MODEL_RAW"
+    fi
+fi
+
+if [ "$IS_PI" = false ] && command -v raspi-config &>/dev/null; then
+    IS_PI=true
+fi
+
+# Get a pretty model string if we haven't already
+if [ "$IS_PI" = true ] && [ -z "$PI_MODEL" ]; then
+    if [ -f /sys/firmware/devicetree/base/model ]; then
+        PI_MODEL=$(tr -d '\0' < /sys/firmware/devicetree/base/model 2>/dev/null || echo "Raspberry Pi")
+    else
+        PI_MODEL="Raspberry Pi"
+    fi
+fi
+
+if [ "$IS_PI" = true ]; then
+    echo ""
+    echo -e "${GREEN}🍓  Raspberry Pi detected: ${PI_MODEL}${NC}"
+    echo ""
+
+    # Check for systemd (should be present on modern Pi OS)
+    HAS_SYSTEMD=false
+    if command -v systemctl &>/dev/null; then
+        HAS_SYSTEMD=true
+    fi
+
+    if [ "$HAS_SYSTEMD" = true ]; then
+        echo -e "  Would you like the Momir Vig server to start"
+        echo -e "  automatically on boot (via systemd)?"
+        echo ""
+        echo -ne "  ${YELLOW}[y/N]${NC} (default: No): "
+        read -r AUTOSTART_ANSWER
+        AUTOSTART_ANSWER="${AUTOSTART_ANSWER:-N}"
+
+        if [[ "$AUTOSTART_ANSWER" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+            SERVICE_NAME="momir-vig"
+            SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+            CURRENT_USER=$(whoami)
+
+            log "Creating systemd service at ${SERVICE_FILE}..."
+
+            sudo tee "$SERVICE_FILE" > /dev/null <<EOF
+[Unit]
+Description=Momir Vig MTG Web App
+After=network.target
+
+[Service]
+Type=simple
+User=${CURRENT_USER}
+WorkingDirectory=${SCRIPT_DIR}
+ExecStart=${SCRIPT_DIR}/venv/bin/python ${SCRIPT_DIR}/momir_app.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable "$SERVICE_NAME"
+            sudo systemctl start "$SERVICE_NAME"
+
+            ok "Auto-start enabled! Momir Vig will start on every boot."
+            echo -e "  Manage it with: ${CYAN}sudo systemctl status ${SERVICE_NAME}${NC}"
+            echo ""
+        else
+            ok "Skipping auto-start setup."
+            echo ""
+        fi
+    else
+        warn "systemd not found — cannot set up auto-start."
+        echo "  To run manually on boot, add this to your crontab (crontab -e):"
+        echo "    @reboot cd ${SCRIPT_DIR} && ./venv/bin/python momir_app.py"
+        echo ""
+    fi
+fi
+
+# ── 3. Virtual environment ──────────────────────────
 VENV_DIR="$SCRIPT_DIR/venv"
 
 if [ ! -d "$VENV_DIR" ]; then
@@ -59,7 +155,7 @@ fi
 VENV_PYTHON="$VENV_DIR/bin/python"
 VENV_PIP="$VENV_DIR/bin/pip"
 
-# ── 3. Python packages ──────────────────────────────
+# ── 4. Python packages ──────────────────────────────
 log "Installing Python packages from requirements.txt..."
 
 $VENV_PIP install --upgrade pip -q
@@ -73,7 +169,7 @@ else
     ok "Flask installed"
 fi
 
-# ── 4. AtomicCards data file ────────────────────────
+# ── 5. AtomicCards data file ────────────────────────
 ATOMIC_FILE="AtomicCards.json.gz"
 ATOMIC_URL="https://mtgjson.com/api/v5/AtomicCards.json.gz"
 
@@ -111,7 +207,7 @@ if [ ! -f "$ATOMIC_FILE" ]; then
     fi
 fi
 
-# ── 5. Build database if needed ─────────────────────
+# ── 6. Build database if needed ─────────────────────
 DB_FILE="momir.db"
 
 log "Checking database: $DB_FILE"
@@ -153,7 +249,7 @@ else
     ok "Database is up to date ($(du -h "$DB_FILE" | cut -f1))"
 fi
 
-# ── 6. Launch web server ────────────────────────────
+# ── 7. Launch web server ────────────────────────────
 echo ""
 log "Starting Momir Vig web server..."
 echo "───────────────────────────────────────────────"
