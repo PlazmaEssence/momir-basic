@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Momir Vig</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>Momir Vig</h1>
+  <div id="status" class="status">connecting…</div>
+</header>
+
+<main>
+  <section class="summon-panel">
+    <label for="cmc-input">Mana Value</label>
+    <div class="stepper">
+      <button id="cmc-down" class="stepper-btn" aria-label="decrease">−</button>
+      <input id="cmc-input" type="number" min="0" max="20" value="3" inputmode="numeric">
+      <button id="cmc-up" class="stepper-btn" aria-label="increase">+</button>
+    </div>
+    <button id="summon-btn" class="primary-btn">Summon</button>
+  </section>
+
+  <section id="preview-panel" class="preview-panel hidden">
+    <img id="preview-img" alt="Card preview">
+    <div id="preview-meta" class="preview-meta"></div>
+    <div class="preview-actions">
+      <button id="reroll-btn">Reroll</button>
+      <button id="print-btn" class="primary-btn">Print</button>
+    </div>
+    <div id="print-result" class="print-result"></div>
+  </section>
+
+  <details class="search-panel">
+    <summary>Search &amp; print a specific card</summary>
+    <input id="search-input" type="search" placeholder="Card name…" autocomplete="off">
+    <ul id="search-results"></ul>
+  </details>
+
+  <details class="settings-panel">
+    <summary>Printer settings</summary>
+    <form id="settings-form">
+      <label>
+        Driver
+        <select id="setting-driver">
+          <option value="mock">Mock (preview PNG only)</option>
+          <option value="escpos">ESC/POS thermal printer</option>
+        </select>
+      </label>
+      <label>
+        Paper width
+        <select id="setting-width">
+          <option value="80">80mm</option>
+          <option value="58">58mm</option>
+        </select>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="setting-art" checked>
+        Fetch card art
+      </label>
+      <button type="submit" class="primary-btn">Save</button>
+      <span id="settings-result"></span>
+    </form>
+  </details>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
