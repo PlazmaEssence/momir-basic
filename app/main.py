@@ -6,6 +6,7 @@ Dev (Mac):  uvicorn app.main:app --reload
 Pi:         started by scripts/momir.service on boot
 """
 import base64
+import hashlib
 import io
 import uuid
 from collections import OrderedDict
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import requests
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -95,9 +96,16 @@ def _build_preview(card: dict) -> dict:
     }
 
 
+def _asset_version(filename: str) -> str:
+    return hashlib.md5((STATIC_DIR / filename).read_bytes()).hexdigest()[:8]
+
+
 @app.get("/")
 def index():
-    return FileResponse(str(STATIC_DIR / "index.html"))
+    html = (STATIC_DIR / "index.html").read_text()
+    for asset in ("style.css", "app.js"):
+        html = html.replace(f"/static/{asset}", f"/static/{asset}?v={_asset_version(asset)}")
+    return HTMLResponse(html)
 
 
 @app.get("/api/health")
