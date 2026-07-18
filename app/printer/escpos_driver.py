@@ -57,7 +57,7 @@ class EscposPrinterDriver(PrinterDriver):
             return {"ok": True, "detail": "sent to printer"}
         except Exception as e:
             self._error = str(e)
-            self._printer = None
+            self.close()
             return {"ok": False, "detail": f"print failed: {e}"}
 
     def status(self) -> dict:
@@ -66,3 +66,11 @@ class EscposPrinterDriver(PrinterDriver):
             "connected": self._printer is not None,
             "detail": self._error or f"connected via {self.config.get('connection')}",
         }
+
+    def close(self) -> None:
+        if self._printer is not None:
+            try:
+                self._printer.close()
+            except Exception as e:
+                print(f"  [escpos printer] error closing connection: {e}")
+            self._printer = None

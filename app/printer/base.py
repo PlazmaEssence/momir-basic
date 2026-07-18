@@ -13,3 +13,8 @@ class PrinterDriver(ABC):
     @abstractmethod
     def status(self) -> dict:
         """Returns {'driver': str, 'connected': bool, 'detail': str}."""
+
+    def close(self) -> None:
+        """Releases any underlying connection/handle. Called before a driver
+        instance is discarded (e.g. settings change swaps in a new one) so
+        it doesn't leak a claimed USB interface or open socket/serial port."""

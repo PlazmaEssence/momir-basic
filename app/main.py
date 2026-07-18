@@ -175,6 +175,7 @@ def get_settings():
 def update_settings(update: SettingsUpdate):
     if update.printer:
         state.config["printer"].update(update.printer)
+        state.printer_driver.close()
         state.printer_driver = get_driver(state.config["printer"])
     if update.art:
         state.config["art"].update(update.art)
