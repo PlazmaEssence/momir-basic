@@ -12,6 +12,7 @@ from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -121,6 +122,23 @@ def summon(req: SummonRequest):
 @app.get("/api/search")
 def search(q: str = ""):
     return {"results": db.search_cards(q, limit=25)}
+
+
+@app.get("/api/cmc_counts")
+def cmc_counts():
+    return db.cmc_counts()
+
+
+@app.post("/api/rebuild_db")
+def rebuild_db():
+    try:
+        build_db.download_atomic_cards()
+        result = build_db.build_database()
+    except requests.RequestException as e:
+        raise HTTPException(502, f"download failed: {e}")
+    except Exception as e:
+        raise HTTPException(500, f"rebuild failed: {e}")
+    return {"ok": True, "card_count": result["card_count"]}
 
 
 @app.post("/api/preview_card")

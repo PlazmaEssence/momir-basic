@@ -1,4 +1,5 @@
 const cmcInput = document.getElementById("cmc-input");
+const cmcCountEl = document.getElementById("cmc-count");
 const statusEl = document.getElementById("status");
 const previewPanel = document.getElementById("preview-panel");
 const previewImg = document.getElementById("preview-img");
@@ -6,6 +7,7 @@ const previewMeta = document.getElementById("preview-meta");
 const printResult = document.getElementById("print-result");
 
 let currentToken = null;
+let cmcCounts = {};
 
 async function api(path, options) {
   const resp = await fetch(path, {
@@ -73,15 +75,33 @@ async function printCurrent() {
   }
 }
 
+function updatePossibilities() {
+  const cmc = parseInt(cmcInput.value, 10) || 0;
+  const n = cmcCounts[cmc] || 0;
+  cmcCountEl.textContent = `${n} possibilit${n === 1 ? "y" : "ies"} at mana value ${cmc}`;
+}
+
+async function loadCmcCounts() {
+  try {
+    cmcCounts = await api("/api/cmc_counts");
+  } catch (e) {
+    cmcCounts = {};
+  }
+  updatePossibilities();
+}
+
 document.getElementById("summon-btn").addEventListener("click", summon);
 document.getElementById("reroll-btn").addEventListener("click", summon);
 document.getElementById("print-btn").addEventListener("click", printCurrent);
 document.getElementById("cmc-up").addEventListener("click", () => {
   cmcInput.value = Math.min(20, (parseInt(cmcInput.value, 10) || 0) + 1);
+  updatePossibilities();
 });
 document.getElementById("cmc-down").addEventListener("click", () => {
   cmcInput.value = Math.max(0, (parseInt(cmcInput.value, 10) || 0) - 1);
+  updatePossibilities();
 });
+cmcInput.addEventListener("input", updatePossibilities);
 
 // Search
 const searchInput = document.getElementById("search-input");
@@ -153,6 +173,26 @@ settingsForm.addEventListener("submit", async (ev) => {
   }
 });
 
+// Card database rebuild
+const rebuildDbBtn = document.getElementById("rebuild-db-btn");
+const rebuildDbResult = document.getElementById("rebuild-db-result");
+
+rebuildDbBtn.addEventListener("click", async () => {
+  rebuildDbBtn.disabled = true;
+  rebuildDbResult.textContent = "Downloading & rebuilding… this can take a minute.";
+  try {
+    const result = await api("/api/rebuild_db", { method: "POST" });
+    rebuildDbResult.textContent = `Done — ${result.card_count} cards.`;
+    refreshStatus();
+    loadCmcCounts();
+  } catch (e) {
+    rebuildDbResult.textContent = `Error: ${e.message}`;
+  } finally {
+    rebuildDbBtn.disabled = false;
+  }
+});
+
 refreshStatus();
 loadSettings();
+loadCmcCounts();
 setInterval(refreshStatus, 15000);

@@ -96,6 +96,13 @@ label {
   color: var(--text);
 }
 
+.cmc-count {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
 button {
   font-size: 1rem;
   padding: 0.7rem 1rem;
@@ -194,6 +201,22 @@ details summary {
 .checkbox input { width: auto; }
 
 #settings-result {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.db-update {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#rebuild-db-btn { width: 100%; }
+
+#rebuild-db-result {
   font-size: 0.85rem;
   color: var(--muted);
 }
