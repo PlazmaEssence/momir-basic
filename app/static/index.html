@@ -20,6 +20,7 @@
       <input id="cmc-input" type="number" min="0" max="20" value="3" inputmode="numeric">
       <button id="cmc-up" class="stepper-btn" aria-label="increase">+</button>
     </div>
+    <div id="cmc-count" class="cmc-count"></div>
     <button id="summon-btn" class="primary-btn">Summon</button>
   </section>
 
@@ -40,7 +41,7 @@
   </details>
 
   <details class="settings-panel">
-    <summary>Printer settings</summary>
+    <summary>Settings</summary>
     <form id="settings-form">
       <label>
         Driver
@@ -63,6 +64,10 @@
       <button type="submit" class="primary-btn">Save</button>
       <span id="settings-result"></span>
     </form>
+    <div class="db-update">
+      <button id="rebuild-db-btn">Redownload &amp; rebuild card database</button>
+      <span id="rebuild-db-result"></span>
+    </div>
   </details>
 </main>
 

@@ -14,9 +14,12 @@ import sqlite3
 import time
 from pathlib import Path
 
+import requests
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SOURCE_PATH = DATA_DIR / "AtomicCards.json.gz"
 DB_PATH = DATA_DIR / "momir.sqlite3"
+ATOMIC_CARDS_URL = "https://mtgjson.com/api/v5/AtomicCards.json.gz"
 
 SCHEMA = """
 CREATE TABLE cards (
@@ -77,6 +80,20 @@ def _iter_creature_faces(cards_data: dict):
             if "Creature" not in types and "Summon" not in types:
                 continue
             yield entry
+
+
+def download_atomic_cards(source_path: Path = SOURCE_PATH, progress=print) -> None:
+    """Downloads the latest AtomicCards.json.gz from MTGJSON, replacing
+    whatever's already at source_path."""
+    progress(f"Downloading {ATOMIC_CARDS_URL} ...")
+    tmp_path = source_path.with_suffix(".json.gz.tmp")
+    with requests.get(ATOMIC_CARDS_URL, stream=True, timeout=(10, 300)) as resp:
+        resp.raise_for_status()
+        with open(tmp_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                f.write(chunk)
+    tmp_path.replace(source_path)
+    progress(f"Downloaded {source_path.name} ({source_path.stat().st_size / 1e6:.1f} MB)")
 
 
 def build_database(source_path: Path = SOURCE_PATH, db_path: Path = DB_PATH, progress=print) -> dict:
