@@ -17,6 +17,8 @@ DEFAULT_CONFIG = {
         "network_host": "",
         "network_port": 9100,
         "paper_width_mm": 80,
+        # "custom" (name/cost/type/text + art crop) or "full_card" (raw Scryfall card image)
+        "card_layout": "custom",
     },
     "art": {
         "enabled": True,

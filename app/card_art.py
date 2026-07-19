@@ -24,18 +24,18 @@ def _cache_key(name: str, scryfall_oracle_id: str | None) -> str:
     return _SAFE_NAME_RE.sub("_", name).strip("_").lower() or "card"
 
 
-def _extract_image_url(card_json: dict) -> str | None:
+def _extract_image_url(card_json: dict, image_size: str = IMAGE_SIZE) -> str | None:
     image_uris = card_json.get("image_uris") or {}
-    if image_uris.get(IMAGE_SIZE):
-        return image_uris[IMAGE_SIZE]
+    if image_uris.get(image_size):
+        return image_uris[image_size]
     for face in card_json.get("card_faces", []):
         face_uris = face.get("image_uris") or {}
-        if face_uris.get(IMAGE_SIZE):
-            return face_uris[IMAGE_SIZE]
+        if face_uris.get(image_size):
+            return face_uris[image_size]
     return None
 
 
-def _lookup_by_oracle_id(oracle_id: str) -> str | None:
+def _lookup_by_oracle_id(oracle_id: str, image_size: str = IMAGE_SIZE) -> str | None:
     resp = requests.get(
         "https://api.scryfall.com/cards/search",
         params={"q": f"oracleid:{oracle_id}", "unique": "prints", "order": "released"},
@@ -46,10 +46,10 @@ def _lookup_by_oracle_id(oracle_id: str) -> str | None:
     data = resp.json().get("data", [])
     if not data:
         return None
-    return _extract_image_url(data[0])
+    return _extract_image_url(data[0], image_size)
 
 
-def _lookup_by_name(name: str) -> str | None:
+def _lookup_by_name(name: str, image_size: str = IMAGE_SIZE) -> str | None:
     resp = requests.get(
         "https://api.scryfall.com/cards/named",
         params={"exact": name},
@@ -65,15 +65,17 @@ def _lookup_by_name(name: str) -> str | None:
             timeout=REQUEST_TIMEOUT,
         )
     resp.raise_for_status()
-    return _extract_image_url(resp.json())
+    return _extract_image_url(resp.json(), image_size)
 
 
-def fetch_art(name: str, scryfall_oracle_id: str | None = None) -> Path | None:
+def fetch_art(name: str, scryfall_oracle_id: str | None = None, image_size: str = IMAGE_SIZE) -> Path | None:
     """Returns a local path to the card's art (PNG/JPG), fetching + caching
     it from Scryfall on first use. Returns None if unavailable (offline,
     not found, disabled, etc.) — never raises."""
     ART_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     key = _cache_key(name, scryfall_oracle_id)
+    if image_size != IMAGE_SIZE:
+        key = f"{key}_{image_size}"
 
     for ext in (".jpg", ".png"):
         cached = ART_CACHE_DIR / f"{key}{ext}"
@@ -83,9 +85,9 @@ def fetch_art(name: str, scryfall_oracle_id: str | None = None) -> Path | None:
     try:
         image_url = None
         if scryfall_oracle_id:
-            image_url = _lookup_by_oracle_id(scryfall_oracle_id)
+            image_url = _lookup_by_oracle_id(scryfall_oracle_id, image_size)
         if not image_url:
-            image_url = _lookup_by_name(name)
+            image_url = _lookup_by_name(name, image_size)
         if not image_url:
             return None
 

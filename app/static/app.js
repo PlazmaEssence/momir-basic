@@ -26,7 +26,7 @@ async function refreshStatus() {
     const health = await api("/api/health");
     const printer = health.printer;
     const dot = printer.connected ? "●" : "○";
-    statusEl.textContent = `${health.card_count} cards · ${dot} ${printer.driver}`;
+    statusEl.textContent = `${health.card_count} cards · ${dot} ${printer.driver} · v${health.version}`;
   } catch (e) {
     statusEl.textContent = "offline";
   }
@@ -57,6 +57,20 @@ async function summon() {
     showPreview(result);
   } catch (e) {
     previewPanel.classList.remove("hidden");
+    previewMeta.textContent = `Error: ${e.message}`;
+  }
+}
+
+async function regenerateCurrent() {
+  if (!currentToken) return;
+  previewMeta.textContent = "Regenerating…";
+  try {
+    const result = await api("/api/regenerate", {
+      method: "POST",
+      body: JSON.stringify({ token: currentToken }),
+    });
+    showPreview(result);
+  } catch (e) {
     previewMeta.textContent = `Error: ${e.message}`;
   }
 }
@@ -92,6 +106,7 @@ async function loadCmcCounts() {
 
 document.getElementById("summon-btn").addEventListener("click", summon);
 document.getElementById("reroll-btn").addEventListener("click", summon);
+document.getElementById("regenerate-btn").addEventListener("click", regenerateCurrent);
 document.getElementById("print-btn").addEventListener("click", printCurrent);
 document.getElementById("cmc-up").addEventListener("click", () => {
   cmcInput.value = Math.min(20, (parseInt(cmcInput.value, 10) || 0) + 1);
@@ -146,6 +161,7 @@ async function loadSettings() {
     const cfg = await api("/api/settings");
     document.getElementById("setting-driver").value = cfg.printer.driver;
     document.getElementById("setting-width").value = String(cfg.printer.paper_width_mm);
+    document.getElementById("setting-layout").value = cfg.printer.card_layout;
     document.getElementById("setting-art").checked = cfg.art.enabled;
   } catch (e) {
     settingsResult.textContent = `Error loading settings: ${e.message}`;
@@ -162,6 +178,7 @@ settingsForm.addEventListener("submit", async (ev) => {
         printer: {
           driver: document.getElementById("setting-driver").value,
           paper_width_mm: parseInt(document.getElementById("setting-width").value, 10),
+          card_layout: document.getElementById("setting-layout").value,
         },
         art: { enabled: document.getElementById("setting-art").checked },
       }),

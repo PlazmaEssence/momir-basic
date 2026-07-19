@@ -153,3 +153,13 @@ def render_card(card: dict, art_path: Path | None = None, paper_width_mm: float 
 
     # Final pass: hard dither to pure black/white for thermal output
     return img.convert("1", dither=Image.FLOYDSTEINBERG)
+
+
+def render_card_full(image_path: Path, paper_width_mm: float = 80) -> Image.Image:
+    """Loads the full Scryfall card image as-is (frame, art, and text baked
+    in) and scales it to the paper's pixel width, preserving aspect ratio."""
+    width = _width_for_paper(paper_width_mm)
+    img = Image.open(image_path).convert("L")
+    target_h = int(img.height * (width / img.width))
+    img = img.resize((width, target_h), Image.LANCZOS)
+    return img.convert("1", dither=Image.FLOYDSTEINBERG)

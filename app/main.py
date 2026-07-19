@@ -8,6 +8,7 @@ Pi:         started by scripts/momir.service on boot
 import base64
 import hashlib
 import io
+import subprocess
 import uuid
 from collections import OrderedDict
 from contextlib import asynccontextmanager
@@ -21,16 +22,36 @@ from pydantic import BaseModel
 
 from . import build_db, card_art, config as config_module, db
 from .printer import get_driver
-from .printer.render import render_card
+from .printer.render import render_card, render_card_full
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+REPO_ROOT = Path(__file__).resolve().parent.parent
 MAX_PENDING = 50
+
+
+def _detect_version() -> str:
+    """Short git commit hash of the running checkout, or "unknown" if this
+    isn't a git repo / git isn't installed / anything else goes wrong."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip() or "unknown"
+    except Exception:
+        pass
+    return "unknown"
 
 
 class AppState:
     def __init__(self):
         self.config: dict = {}
         self.printer_driver = None
+        self.version: str = "unknown"
         self.pending: "OrderedDict[str, dict]" = OrderedDict()
 
     def remember(self, card: dict, image) -> str:
@@ -49,8 +70,10 @@ async def lifespan(app: FastAPI):
     build_db.ensure_database(progress=print)
     state.config = config_module.load_config()
     state.printer_driver = get_driver(state.config["printer"])
+    state.version = _detect_version()
     print(f"Loaded {db.card_count()} creature cards")
     print(f"Printer: {state.printer_driver.status()}")
+    print(f"Version: {state.version}")
     yield
 
 
@@ -70,6 +93,10 @@ class PrintRequest(BaseModel):
     token: str
 
 
+class RegenerateRequest(BaseModel):
+    token: str
+
+
 class SettingsUpdate(BaseModel):
     printer: dict | None = None
     art: dict | None = None
@@ -83,10 +110,25 @@ def _image_to_data_url(image) -> str:
 
 
 def _build_preview(card: dict) -> dict:
-    art_path = None
-    if state.config.get("art", {}).get("enabled", True):
-        art_path = card_art.fetch_art(card["name"], card.get("scryfall_oracle_id"))
-    image = render_card(card, art_path, paper_width_mm=state.config["printer"]["paper_width_mm"])
+    paper_width_mm = state.config["printer"]["paper_width_mm"]
+    art_enabled = state.config.get("art", {}).get("enabled", True)
+    layout = state.config["printer"].get("card_layout", "custom")
+
+    if layout == "full_card" and art_enabled:
+        full_path = card_art.fetch_art(card["name"], card.get("scryfall_oracle_id"), image_size="large")
+        if full_path is not None:
+            image = render_card_full(full_path, paper_width_mm=paper_width_mm)
+            token = state.remember(card, image)
+            return {
+                "token": token,
+                "card": card,
+                "image": _image_to_data_url(image),
+                "art_used": True,
+            }
+        # full card image unavailable (offline/not found) — fall back to custom render below
+
+    art_path = card_art.fetch_art(card["name"], card.get("scryfall_oracle_id")) if art_enabled else None
+    image = render_card(card, art_path, paper_width_mm=paper_width_mm)
     token = state.remember(card, image)
     return {
         "token": token,
@@ -114,6 +156,7 @@ def health():
         "card_count": db.card_count(),
         "printer": state.printer_driver.status(),
         "art_enabled": state.config.get("art", {}).get("enabled", True),
+        "version": state.version,
     }
 
 
@@ -155,6 +198,14 @@ def preview_card(req: PreviewCardRequest):
     if card is None:
         raise HTTPException(404, "card not found")
     return _build_preview(card)
+
+
+@app.post("/api/regenerate")
+def regenerate(req: RegenerateRequest):
+    pending = state.pending.get(req.token)
+    if pending is None:
+        raise HTTPException(404, "nothing pending for that token (summon/preview first)")
+    return _build_preview(pending["card"])
 
 
 @app.post("/api/print")
