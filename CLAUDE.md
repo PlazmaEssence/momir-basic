@@ -35,9 +35,10 @@ ssh momir.local
 cd ~/momir && git pull origin main
 sudo systemctl restart momir.service
 ```
-Wi-Fi is provisioned once via `scripts/setup_pi_wifi.sh` (NetworkManager client
-profiles: home network preferred, mobile hotspot fallback — `wlan0` no longer runs
-as its own access point).
+Wi-Fi is provisioned once via `scripts/setup_pi_ap.sh` (NetworkManager AP profile:
+`wlan0` runs its own access point, SSID `MomirVig`; `eth0` provides internet via
+DHCP + NAT). The older `scripts/setup_pi_wifi.sh` (wlan0 as a Wi-Fi client) is
+superseded and kept only for reference.
 
 ## Architecture
 
@@ -77,10 +78,13 @@ as its own access point).
   a content-hash query string (`?v=<md5>`) onto the `/static/app.js` and
   `/static/style.css` URLs so browsers can't silently keep serving a stale cached
   copy after a deploy.
-- `scripts/setup_pi_wifi.sh` — Pi-only provisioning script: registers `wlan0` as a
-  NetworkManager Wi-Fi client (home network profile at `autoconnect-priority 100`,
-  mobile-hotspot fallback at `10`), sets up avahi for `http://momir.local`, and
-  installs `scripts/momir.service` as a systemd unit.
+- `scripts/setup_pi_ap.sh` — Pi-only provisioning script: makes `wlan0` its own
+  NetworkManager WPA2 access point (SSID `MomirVig` by default, `ipv4.method
+  shared` so NetworkManager handles DHCP/NAT out through `eth0`), deletes the old
+  `momir-home`/`momir-hotspot` client profiles so they don't compete for `wlan0`,
+  sets up avahi for `http://momir.local`, and installs `scripts/momir.service` as
+  a systemd unit. `scripts/setup_pi_wifi.sh` (wlan0 as a Wi-Fi client instead) is
+  superseded and kept only for reference.
 
 ## Outstanding work
 
