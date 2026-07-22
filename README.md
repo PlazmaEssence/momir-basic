@@ -10,9 +10,9 @@ entire history, printed on a receipt printer.
 - Printing goes through a swappable driver: a `mock` driver (saves a PNG,
   no hardware needed — this is the default, used for development) and a
   real `escpos` driver for USB/serial/network ESC/POS thermal printers.
-- On a Raspberry Pi, `wlan0` connects out to your home Wi-Fi (preferred) or
-  a mobile hotspot (fallback, for when you're away from home) — control the
-  app from any phone or laptop on the same network.
+- On a Raspberry Pi, `wlan0` runs its own Wi-Fi access point (`MomirVig`) —
+  connect a phone/laptop straight to the Pi, no router involved — while
+  `eth0` provides internet (for card art) via a plain Ethernet connection.
 
 ## Requirements
 
@@ -59,20 +59,20 @@ startups after the first are instant.
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
-4. Run the provisioning script — this registers `wlan0` as a Wi-Fi client
-   with your home network (preferred) and a mobile hotspot (fallback for
-   when you're away from home), sets up `http://momir.local`, and installs
-   the app as a systemd service that starts on boot:
+4. Plug `eth0` into your router with an Ethernet cable (this is how the Pi
+   gets internet — for card art — regardless of Wi-Fi).
+5. Run the provisioning script — this turns `wlan0` into its own access
+   point, sets up `http://momir.local`, and installs the app as a systemd
+   service that starts on boot:
    ```bash
-   sudo MOMIR_HOME_SSID="MyHomeWifi" MOMIR_HOME_PASSWORD="homepassword" \
-        MOMIR_HOTSPOT_SSID="MyPhoneHotspot" MOMIR_HOTSPOT_PASSWORD="hotspotpassword" \
-        bash scripts/setup_pi_wifi.sh
+   sudo bash scripts/setup_pi_ap.sh
    ```
-   (All four are required; both passwords must be 8+ characters.)
-5. Connect your phone/laptop to the same network the Pi joined (home
-   Wi-Fi, or your hotspot when away) and open `http://momir.local`. Check
-   which network the Pi is on with `nmcli -f NAME,DEVICE connection show --active`.
-6. Plug in your thermal printer and switch the driver from `mock` to
+   Defaults to SSID `MomirVig`; override with `MOMIR_SSID` /
+   `MOMIR_WIFI_PASSWORD` env vars if you want something else (password
+   must be 8+ characters).
+6. Connect your phone/laptop to the `MomirVig` Wi-Fi network and open
+   `http://momir.local` (or `http://192.168.4.1`).
+7. Plug in your thermal printer and switch the driver from `mock` to
    `escpos` — either in the "Printer settings" panel in the web UI, or by
    editing `data/config.json` directly. For USB printers, find the vendor
    and product IDs with `lsusb`, e.g.:
@@ -89,11 +89,10 @@ startups after the first are instant.
    sudo udevadm control --reload-rules && sudo udevadm trigger
    ```
 
-**Card art needs internet.** Since `wlan0` connects out to your home
-network or hotspot as a regular client, it gets internet the same way any
-device on that network would — no extra configuration needed. Without
-internet (e.g. neither known network is in range), summon/print still work
-fine; cards just render without art.
+**Card art needs internet.** Plug `eth0` into your router; NetworkManager
+NATs `wlan0` clients out through it automatically, no extra configuration
+needed. Without `eth0` connected, summon/print still work fine; cards just
+render without art.
 
 Useful commands on the Pi:
 ```bash
@@ -136,6 +135,7 @@ data/
   art_cache/                cached art
   config.json                printer/art settings
 scripts/
-  setup_pi_wifi.sh         Pi-only: Wi-Fi client (home + hotspot fallback) + systemd service provisioning
+  setup_pi_ap.sh            Pi-only: Wi-Fi access point (MomirVig) + systemd service provisioning
+  setup_pi_wifi.sh          Pi-only, superseded: Wi-Fi client (home + hotspot fallback) instead of AP mode
   momir.service             systemd unit template
 ```
