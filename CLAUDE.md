@@ -120,9 +120,18 @@ both systemd services and a sudoers grant — see the Architecture section below
   pinned to those four literal invocations; nmcli is granted broadly, since its
   argument surface — arbitrary saved connection names/SSIDs — doesn't work with
   literal-string sudoers pinning). Binding port 80 as non-root needs
-  `AmbientCapabilities=CAP_NET_BIND_SERVICE` in `scripts/momir-panel.service` — and
-  that unit must *not* set `NoNewPrivileges=yes`, which would silently break the
-  `sudo` calls the panel depends on.
+  `AmbientCapabilities=CAP_NET_BIND_SERVICE` in `scripts/momir-panel.service`. That
+  unit must *not* set `NoNewPrivileges=yes` **or** `CapabilityBoundingSet=` to
+  anything narrower than the default full set — either one silently breaks the
+  `sudo` calls the panel depends on, because `sudo` is a setuid-root binary that
+  needs to regain capabilities (`CAP_SETUID`/`CAP_SETGID`/`CAP_AUDIT_WRITE`, etc.)
+  outside whatever's left in the bounding set; a narrowed bounding set fails with
+  `sudo: unable to change to root gid: Operation not permitted` even though the
+  exact same sudoers grant works fine from an interactive shell. (Hit this for
+  real on hardware: an earlier version of this unit also set
+  `CapabilityBoundingSet=CAP_NET_BIND_SERVICE`, which broke every sudo call from
+  the running service while working perfectly over SSH — the giveaway that it's a
+  bounding-set issue and not a sudoers issue.)
 - `scripts/setup_pi_ap.sh` — Pi-only provisioning script: creates `wlan0`'s
   NetworkManager WPA2 access point profile (SSID `MomirVig` by default, `ipv4
   .method shared` so NetworkManager handles DHCP/NAT out through `eth0`) as a
