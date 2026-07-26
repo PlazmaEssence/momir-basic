@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Momir Vig Print Upload</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>Print Upload</h1>
+  <div id="status" class="status">connecting…</div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button id="tab-image-btn" class="tab-btn active" type="button">Image</button>
+    <button id="tab-text-btn" class="tab-btn" type="button">Text</button>
+  </div>
+
+  <section id="image-panel" class="panel">
+    <label for="image-input">Choose an image</label>
+    <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp">
+    <img id="image-preview" class="image-preview hidden" alt="Selected image preview">
+    <button id="image-print-btn" class="primary-btn" disabled>Print image</button>
+    <div id="image-result" class="print-result"></div>
+  </section>
+
+  <section id="text-panel" class="panel hidden">
+    <label class="checkbox">
+      <input type="checkbox" id="text-bold-title">
+      First line is a bold title
+    </label>
+    <label for="text-size">Font size</label>
+    <select id="text-size">
+      <option value="small">Small</option>
+      <option value="medium" selected>Medium</option>
+      <option value="large">Large</option>
+    </select>
+    <label for="text-input">Text to print</label>
+    <textarea id="text-input" rows="8" maxlength="5000" placeholder="Type or paste text here…"></textarea>
+    <button id="text-print-btn" class="primary-btn">Print text</button>
+    <div id="text-result" class="print-result"></div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

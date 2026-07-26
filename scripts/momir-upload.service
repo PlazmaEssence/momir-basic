@@ -1,12 +1,12 @@
 [Unit]
-Description=Momir Vig thermal printer app
+Description=Momir Vig print-from-upload app
 After=network.target momir-printsvc.service
 
 [Service]
 Type=simple
 User=__USER__
 WorkingDirectory=__PROJECT_DIR__
-ExecStart=__PROJECT_DIR__/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecStart=__PROJECT_DIR__/.venv/bin/uvicorn upload.main:app --host 0.0.0.0 --port 8001
 Restart=on-failure
 RestartSec=3
 

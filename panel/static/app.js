@@ -16,56 +16,68 @@ function statusDot(ok, neutral) {
   return dot;
 }
 
-// Momir print app service
-const momirStatusEl = document.getElementById("momir-status");
-const momirStartBtn = document.getElementById("momir-start-btn");
-const momirStopBtn = document.getElementById("momir-stop-btn");
-const momirBootToggle = document.getElementById("momir-boot-toggle");
-const momirActionResult = document.getElementById("momir-action-result");
-const momirLink = document.getElementById("momir-link");
+// Managed services: print app, print upload app, shared print service.
+// Each has identical start/stop/enable-on-boot controls, so one function
+// wires up all three instead of tripling the same code.
+function setupServiceCard(prefix, linkPort) {
+  const statusEl = document.getElementById(`${prefix}-status`);
+  const startBtn = document.getElementById(`${prefix}-start-btn`);
+  const stopBtn = document.getElementById(`${prefix}-stop-btn`);
+  const bootToggle = document.getElementById(`${prefix}-boot-toggle`);
+  const actionResult = document.getElementById(`${prefix}-action-result`);
+  const link = document.getElementById(`${prefix}-link`);
 
-momirLink.href = `http://${location.hostname}:8000/`;
-
-function renderMomirStatus(status) {
-  momirStatusEl.innerHTML = "";
-  if (!status.supported) {
-    momirStatusEl.textContent = "Not supported on this platform";
-    momirStartBtn.disabled = true;
-    momirStopBtn.disabled = true;
-    momirBootToggle.disabled = true;
-    return;
+  if (link && linkPort) {
+    link.href = `http://${location.hostname}:${linkPort}/`;
   }
-  momirStatusEl.appendChild(statusDot(status.active));
-  momirStatusEl.appendChild(document.createTextNode(status.active ? "Running" : "Stopped"));
-  momirStartBtn.disabled = status.active;
-  momirStopBtn.disabled = !status.active;
-  momirBootToggle.checked = status.enabled;
-  momirBootToggle.disabled = false;
+
+  function render(status) {
+    statusEl.innerHTML = "";
+    if (!status.supported) {
+      statusEl.textContent = "Not supported on this platform";
+      startBtn.disabled = true;
+      stopBtn.disabled = true;
+      bootToggle.disabled = true;
+      return;
+    }
+    statusEl.appendChild(statusDot(status.active));
+    statusEl.appendChild(document.createTextNode(status.active ? "Running" : "Stopped"));
+    startBtn.disabled = status.active;
+    stopBtn.disabled = !status.active;
+    bootToggle.checked = status.enabled;
+    bootToggle.disabled = false;
+  }
+
+  async function refresh() {
+    try {
+      render(await api(`/api/${prefix}/status`));
+    } catch (e) {
+      statusEl.textContent = `Error: ${e.message}`;
+    }
+  }
+
+  async function action(path) {
+    actionResult.textContent = "";
+    try {
+      render(await api(path, { method: "POST" }));
+    } catch (e) {
+      actionResult.textContent = `Error: ${e.message}`;
+      refresh();
+    }
+  }
+
+  startBtn.addEventListener("click", () => action(`/api/${prefix}/start`));
+  stopBtn.addEventListener("click", () => action(`/api/${prefix}/stop`));
+  bootToggle.addEventListener("change", () =>
+    action(bootToggle.checked ? `/api/${prefix}/enable` : `/api/${prefix}/disable`)
+  );
+
+  return refresh;
 }
 
-async function refreshMomirStatus() {
-  try {
-    renderMomirStatus(await api("/api/momir/status"));
-  } catch (e) {
-    momirStatusEl.textContent = `Error: ${e.message}`;
-  }
-}
-
-async function momirAction(path) {
-  momirActionResult.textContent = "";
-  try {
-    renderMomirStatus(await api(path, { method: "POST" }));
-  } catch (e) {
-    momirActionResult.textContent = `Error: ${e.message}`;
-    refreshMomirStatus();
-  }
-}
-
-momirStartBtn.addEventListener("click", () => momirAction("/api/momir/start"));
-momirStopBtn.addEventListener("click", () => momirAction("/api/momir/stop"));
-momirBootToggle.addEventListener("change", () =>
-  momirAction(momirBootToggle.checked ? "/api/momir/enable" : "/api/momir/disable")
-);
+const refreshMomirStatus = setupServiceCard("momir", 8000);
+const refreshUploadStatus = setupServiceCard("upload", 8001);
+const refreshPrintsvcStatus = setupServiceCard("printsvc", null);
 
 // Network
 const networkStatusEl = document.getElementById("network-status");
@@ -224,11 +236,15 @@ rescanBtn.addEventListener("click", () => {
 });
 
 refreshMomirStatus();
+refreshUploadStatus();
+refreshPrintsvcStatus();
 refreshNetworkStatus();
 refreshSavedNetworks();
 refreshScan();
 setInterval(() => {
   refreshMomirStatus();
+  refreshUploadStatus();
+  refreshPrintsvcStatus();
   refreshNetworkStatus();
   refreshSavedNetworks();
 }, 15000);

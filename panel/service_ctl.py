@@ -1,15 +1,12 @@
 """
-systemctl wrapper scoped to momir.service (start/stop/enable/disable/status).
-
-Read-only queries (`is-active`/`is-enabled`) run unprivileged; the mutating
-verbs run under sudo per the panel's scoped sudoers grant (see
+systemctl wrapper, scoped to one named unit (start/stop/enable/disable/status)
+per instance. Read-only queries (`is-active`/`is-enabled`) run unprivileged;
+the mutating verbs run under sudo per the panel's scoped sudoers grant (see
 scripts/setup_pi_ap.sh). Degrades to a "not supported" response when
 systemctl isn't installed (Mac dev).
 """
 import shutil
 import subprocess
-
-SERVICE = "momir.service"
 
 
 def _available() -> bool:
@@ -24,37 +21,36 @@ def _run(args: list[str], sudo: bool = False, timeout: int = 10):
         return None
 
 
-def status() -> dict:
-    if not _available():
-        return {"supported": False}
-    active = _run(["systemctl", "is-active", SERVICE])
-    enabled = _run(["systemctl", "is-enabled", SERVICE])
-    return {
-        "supported": True,
-        "active": bool(active and active.stdout.strip() == "active"),
-        "enabled": bool(enabled and enabled.stdout.strip() == "enabled"),
-    }
+class ServiceController:
+    def __init__(self, service: str):
+        self.service = service
 
+    def status(self) -> dict:
+        if not _available():
+            return {"supported": False}
+        active = _run(["systemctl", "is-active", self.service])
+        enabled = _run(["systemctl", "is-enabled", self.service])
+        return {
+            "supported": True,
+            "active": bool(active and active.stdout.strip() == "active"),
+            "enabled": bool(enabled and enabled.stdout.strip() == "enabled"),
+        }
 
-def _verb(verb: str) -> None:
-    if not _available():
-        raise RuntimeError("systemctl not available on this platform")
-    result = _run(["systemctl", verb, SERVICE], sudo=True, timeout=20)
-    if result is None or result.returncode != 0:
-        raise RuntimeError(f"systemctl {verb} failed: {result.stderr.strip() if result else 'error'}")
+    def _verb(self, verb: str) -> None:
+        if not _available():
+            raise RuntimeError("systemctl not available on this platform")
+        result = _run(["systemctl", verb, self.service], sudo=True, timeout=20)
+        if result is None or result.returncode != 0:
+            raise RuntimeError(f"systemctl {verb} failed: {result.stderr.strip() if result else 'error'}")
 
+    def start(self) -> None:
+        self._verb("start")
 
-def start() -> None:
-    _verb("start")
+    def stop(self) -> None:
+        self._verb("stop")
 
+    def enable(self) -> None:
+        self._verb("enable")
 
-def stop() -> None:
-    _verb("stop")
-
-
-def enable() -> None:
-    _verb("enable")
-
-
-def disable() -> None:
-    _verb("disable")
+    def disable(self) -> None:
+        self._verb("disable")

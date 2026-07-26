@@ -8,6 +8,7 @@ Pi:         started by scripts/momir.service on boot
 import base64
 import hashlib
 import io
+import os
 import subprocess
 import uuid
 from collections import OrderedDict
@@ -21,12 +22,19 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import build_db, card_art, config as config_module, db
-from .printer import get_driver
 from .printer.render import render_card, render_card_full, render_card_full_preview
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAX_PENDING = 50
+
+# The printsvc process owns the actual printer connection (see printsvc/main.py
+# for why); this app never touches a PrinterDriver directly, it just calls
+# printsvc over localhost HTTP. Fallback used only for rendering a preview
+# when printsvc happens to be unreachable — printing itself will still report
+# a clear error at that point rather than silently succeeding.
+PRINTSVC_URL = os.environ.get("MOMIR_PRINTSVC_URL", "http://127.0.0.1:8002")
+FALLBACK_RENDER_CONFIG = {"paper_width_mm": 80, "card_layout": "custom"}
 
 
 def _detect_version() -> str:
@@ -49,8 +57,7 @@ def _detect_version() -> str:
 
 class AppState:
     def __init__(self):
-        self.config: dict = {}
-        self.printer_driver = None
+        self.art_config: dict = {}
         self.version: str = "unknown"
         self.pending: "OrderedDict[str, dict]" = OrderedDict()
 
@@ -68,11 +75,9 @@ state = AppState()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     build_db.ensure_database(progress=print)
-    state.config = config_module.load_config()
-    state.printer_driver = get_driver(state.config["printer"])
+    state.art_config = config_module.load_config()["art"]
     state.version = _detect_version()
     print(f"Loaded {db.card_count()} creature cards")
-    print(f"Printer: {state.printer_driver.status()}")
     print(f"Version: {state.version}")
     yield
 
@@ -102,17 +107,58 @@ class SettingsUpdate(BaseModel):
     art: dict | None = None
 
 
-def _image_to_data_url(image) -> str:
+def _encode_png_base64(image) -> str:
     buf = io.BytesIO()
     image.save(buf, format="PNG")
-    encoded = base64.b64encode(buf.getvalue()).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _image_to_data_url(image) -> str:
+    return f"data:image/png;base64,{_encode_png_base64(image)}"
+
+
+def _printsvc_status() -> dict | None:
+    try:
+        resp = requests.get(f"{PRINTSVC_URL}/api/status", timeout=3)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException:
+        return None
+
+
+def _printer_render_config() -> dict:
+    """paper_width_mm/card_layout needed to render a preview. Falls back to
+    defaults if printsvc is unreachable so summon/preview still work — the
+    print itself will report a clear error at that point instead."""
+    status = _printsvc_status()
+    if status is None:
+        return FALLBACK_RENDER_CONFIG
+    return {"paper_width_mm": status["paper_width_mm"], "card_layout": status["card_layout"]}
+
+
+def _printsvc_get_settings() -> dict:
+    try:
+        resp = requests.get(f"{PRINTSVC_URL}/api/settings", timeout=3)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as e:
+        raise HTTPException(503, f"print service unreachable: {e}")
+
+
+def _printsvc_print(image) -> dict:
+    try:
+        resp = requests.post(f"{PRINTSVC_URL}/api/print", json={"image": _encode_png_base64(image)}, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as e:
+        return {"ok": False, "detail": f"print service unreachable: {e}"}
 
 
 def _build_preview(card: dict) -> dict:
-    paper_width_mm = state.config["printer"]["paper_width_mm"]
-    art_enabled = state.config.get("art", {}).get("enabled", True)
-    layout = state.config["printer"].get("card_layout", "custom")
+    printer_render_config = _printer_render_config()
+    paper_width_mm = printer_render_config["paper_width_mm"]
+    art_enabled = state.art_config.get("enabled", True)
+    layout = printer_render_config["card_layout"]
 
     if layout == "full_card" and art_enabled:
         full_path = card_art.fetch_art(card["name"], card.get("scryfall_oracle_id"), image_size="large")
@@ -155,10 +201,16 @@ def index():
 
 @app.get("/api/health")
 def health():
+    status = _printsvc_status()
+    printer_status = status["printer"] if status else {
+        "driver": "unknown",
+        "connected": False,
+        "detail": "print service unreachable",
+    }
     return {
         "card_count": db.card_count(),
-        "printer": state.printer_driver.status(),
-        "art_enabled": state.config.get("art", {}).get("enabled", True),
+        "printer": printer_status,
+        "art_enabled": state.art_config.get("enabled", True),
         "version": state.version,
     }
 
@@ -217,22 +269,27 @@ def print_card(req: PrintRequest):
     pending = state.pending.get(req.token)
     if pending is None:
         raise HTTPException(404, "nothing pending for that token (summon/preview first)")
-    result = state.printer_driver.print_image(pending["image"])
-    return result
+    return _printsvc_print(pending["image"])
 
 
 @app.get("/api/settings")
 def get_settings():
-    return state.config
+    return {"printer": _printsvc_get_settings(), "art": state.art_config}
 
 
 @app.post("/api/settings")
 def update_settings(update: SettingsUpdate):
     if update.printer:
-        state.config["printer"].update(update.printer)
-        state.printer_driver.close()
-        state.printer_driver = get_driver(state.config["printer"])
+        try:
+            resp = requests.post(f"{PRINTSVC_URL}/api/settings", json=update.printer, timeout=10)
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            raise HTTPException(503, f"print service unreachable: {e}")
     if update.art:
-        state.config["art"].update(update.art)
-    config_module.save_config(state.config)
-    return state.config
+        # Re-load from disk right before merging so we don't clobber a change
+        # printsvc made to the "printer" section of the same file in between.
+        cfg = config_module.load_config()
+        cfg["art"].update(update.art)
+        config_module.save_config(cfg)
+        state.art_config = cfg["art"]
+    return {"printer": _printsvc_get_settings(), "art": state.art_config}

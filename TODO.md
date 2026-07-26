@@ -43,6 +43,18 @@ Outstanding work and ideas for Momir Vig.
       `setup_pi_ap.sh` (AP-only) and the now-deleted `setup_pi_wifi.sh`
       (fixed two-SSID client). Runs as the unprivileged app user via a scoped
       `/etc/sudoers.d/momir-panel` grant rather than as root.
+- [x] **Print-from-upload app.** New `upload/` app (port 8001) lets anyone on
+      the network print an arbitrary uploaded image or a block of text on
+      the same thermal printer the card app uses — resized/dithered to the
+      configured paper width, with a height clamp on tall images, upload
+      size/content-type validation, and text options (bold first-line title,
+      small/medium/large font size). Extracted printer-connection ownership
+      into a new shared `printsvc/` (port 8002, 127.0.0.1 only) so the card
+      app and the upload app never race to claim the same USB/serial device;
+      both now call it over HTTP to print instead of holding their own
+      driver. `panel/service_ctl.py` is now parametrized by unit name so the
+      control panel has start/stop/start-on-boot cards for all three backend
+      services, not just `momir.service`.
 
 ## Known issues
 
