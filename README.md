@@ -10,9 +10,11 @@ entire history, printed on a receipt printer.
 - Printing goes through a swappable driver: a `mock` driver (saves a PNG,
   no hardware needed — this is the default, used for development) and a
   real `escpos` driver for USB/serial/network ESC/POS thermal printers.
-- On a Raspberry Pi, `wlan0` runs its own Wi-Fi access point (`MomirVig`) —
-  connect a phone/laptop straight to the Pi, no router involved — while
-  `eth0` provides internet (for card art) via a plain Ethernet connection.
+- On a Raspberry Pi, a control panel at `http://momir.local` (port 80)
+  manages an ordered list of Wi-Fi networks for `wlan0` to join; it falls
+  back to broadcasting its own access point (`MomirVig`) only when none of
+  those networks and no Ethernet connection are available. `eth0` provides
+  internet (for card art) via a plain Ethernet connection.
 
 ## Requirements
 
@@ -61,9 +63,10 @@ startups after the first are instant.
    ```
 4. Plug `eth0` into your router with an Ethernet cable (this is how the Pi
    gets internet — for card art — regardless of Wi-Fi).
-5. Run the provisioning script — this turns `wlan0` into its own access
-   point, sets up `http://momir.local`, and installs the app as a systemd
-   service that starts on boot:
+5. Run the provisioning script — this creates the `MomirVig` fallback
+   access point on `wlan0`, sets up `http://momir.local`, and installs both
+   the print app and the control panel as systemd services that start on
+   boot:
    ```bash
    sudo bash scripts/setup_pi_ap.sh
    ```
@@ -71,7 +74,13 @@ startups after the first are instant.
    `MOMIR_WIFI_PASSWORD` env vars if you want something else (password
    must be 8+ characters).
 6. Connect your phone/laptop to the `MomirVig` Wi-Fi network and open
-   `http://momir.local` (or `http://192.168.4.1`).
+   `http://momir.local` (or `http://192.168.4.1`) — the control panel. From
+   there, add your real Wi-Fi network(s) under "Network" (reorder them if
+   you have more than one; the top entry is tried first). `wlan0` only
+   falls back to broadcasting `MomirVig` again when none of the saved
+   networks and no Ethernet connection are available, so once you've added
+   your home network the Pi will normally just join it on boot. Open the
+   print app itself via the "Open Momir Vig App →" link (port 8000).
 7. Plug in your thermal printer and switch the driver from `mock` to
    `escpos` — either in the "Printer settings" panel in the web UI, or by
    editing `data/config.json` directly. For USB printers, find the vendor
@@ -96,10 +105,16 @@ render without art.
 
 Useful commands on the Pi:
 ```bash
-sudo systemctl status momir.service     # is it running?
-journalctl -u momir.service -f          # live logs
-sudo systemctl restart momir.service    # after editing config.json by hand
+sudo systemctl status momir.service         # is the print app running?
+sudo systemctl status momir-panel.service   # is the control panel running?
+journalctl -u momir.service -f              # print app logs
+journalctl -u momir-panel.service -f        # control panel logs
+sudo systemctl restart momir.service        # after editing config.json by hand
+nmcli -f NAME,AUTOCONNECT-PRIORITY connection show   # saved Wi-Fi networks + priority
 ```
+
+The print app (`momir.service`) can also be started/stopped and included in
+or excluded from boot entirely from the control panel UI, no SSH needed.
 
 ## Card pool
 
@@ -129,13 +144,18 @@ app/
     render.py              composes name/cost/type/text/art into one image
     fonts/                  bundled DejaVu Sans (works the same on Mac + Pi)
   static/               vanilla HTML/CSS/JS control page (no build step, no CDN)
+panel/
+  main.py               FastAPI app: momir.service control + Wi-Fi management, port 80
+  network.py             nmcli wrapper (scan, saved networks, AP fallback)
+  service_ctl.py           systemctl wrapper scoped to momir.service
+  static/                    vanilla HTML/CSS/JS control panel page
 data/
   AtomicCards.json.gz    source data (you provide)
   momir.sqlite3            generated
   art_cache/                cached art
   config.json                printer/art settings
 scripts/
-  setup_pi_ap.sh            Pi-only: Wi-Fi access point (MomirVig) + systemd service provisioning
-  setup_pi_wifi.sh          Pi-only, superseded: Wi-Fi client (home + hotspot fallback) instead of AP mode
-  momir.service             systemd unit template
+  setup_pi_ap.sh            Pi-only: Wi-Fi access point (MomirVig) fallback + both systemd services + sudoers
+  momir.service             systemd unit template (print app, port 8000)
+  momir-panel.service       systemd unit template (control panel, port 80)
 ```

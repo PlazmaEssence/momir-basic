@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Momir Vig Control Panel</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>Momir Vig</h1>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Print app</h2>
+    <div id="momir-status" class="status">connecting…</div>
+    <div class="btn-row">
+      <button id="momir-start-btn">Start</button>
+      <button id="momir-stop-btn">Stop</button>
+    </div>
+    <label class="switch-row">
+      <input type="checkbox" id="momir-boot-toggle" disabled>
+      Start on boot
+    </label>
+    <span id="momir-action-result" class="action-result"></span>
+    <a id="momir-link" class="app-link" href="#" target="_blank" rel="noopener">Open Momir Vig App →</a>
+  </section>
+
+  <section class="panel">
+    <h2>Network</h2>
+    <div id="network-status" class="status">connecting…</div>
+
+    <ul id="network-list" class="network-list"></ul>
+
+    <form id="add-network-form" class="add-network-form">
+      <label for="add-ssid">Add a network</label>
+      <input id="add-ssid" list="scanned-ssids" type="text" placeholder="SSID" autocomplete="off" required>
+      <datalist id="scanned-ssids"></datalist>
+      <input id="add-password" type="password" placeholder="Password (min. 8 characters)" minlength="8" required>
+      <div class="btn-row">
+        <button type="submit" class="primary-btn">Add network</button>
+        <button type="button" id="rescan-btn">Rescan</button>
+      </div>
+      <span id="add-network-result" class="action-result"></span>
+    </form>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
