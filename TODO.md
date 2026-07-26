@@ -32,6 +32,17 @@ Outstanding work and ideas for Momir Vig.
       drops cards whose printings are all online-only — catches ~500 Arena-only
       creatures that didn't have the `A-` prefix. Falls back to no filtering if
       the file can't be fetched, rather than failing the build.
+- [x] **Port-80 control panel: service toggle + Wi-Fi priority/AP fallback.**
+      New `panel/` app (separate FastAPI process, `momir-panel.service`, port
+      80, http://momir.local) with a page to start/stop `momir.service` and
+      toggle whether it starts on boot, plus a live-editable, priority-ordered
+      list of Wi-Fi networks for `wlan0` to join. A background reconciliation
+      loop in `panel/network.py` picks the best available target every ~20s —
+      highest-priority saved SSID in range, else idle if Ethernet has a link,
+      else the `MomirVig` AP — replacing the old fixed choice between
+      `setup_pi_ap.sh` (AP-only) and the now-deleted `setup_pi_wifi.sh`
+      (fixed two-SSID client). Runs as the unprivileged app user via a scoped
+      `/etc/sudoers.d/momir-panel` grant rather than as root.
 
 ## Known issues
 
