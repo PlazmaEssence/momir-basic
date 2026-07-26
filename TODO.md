@@ -18,6 +18,20 @@ Outstanding work and ideas for Momir Vig.
       control page (e.g. next to the status line) so it's easy to confirm which
       deployed version is running, especially when comparing Mac vs. Pi. Probably
       the short git commit hash, read at startup.
+- [x] **Printer connection indicator (red/green icon).** Status line now shows
+      a colored dot (green = connected, red = disconnected) driven by
+      `printer.connected` from `/api/health`, replacing the old ●/○ text glyph.
+- [x] **Color preview for full-card layout.** When `card_layout` is
+      `full_card`, the web preview now shows the original color Scryfall image
+      (`render_card_full_preview()` in `app/printer/render.py`) while the token
+      stashed for `/api/print` still holds the dithered B&W image
+      (`render_card_full()`), so printing is unaffected.
+- [x] **Exclude cards never printed in paper.** `build_db.py` now cross-
+      references each card's `printings` against MTGJSON's `SetList.json.gz`
+      (`isOnlineOnly` per set, auto-downloaded to `data/SetList.json.gz`) and
+      drops cards whose printings are all online-only — catches ~500 Arena-only
+      creatures that didn't have the `A-` prefix. Falls back to no filtering if
+      the file can't be fetched, rather than failing the build.
 
 ## Known issues
 

@@ -155,6 +155,13 @@ def render_card(card: dict, art_path: Path | None = None, paper_width_mm: float 
     return img.convert("1", dither=Image.FLOYDSTEINBERG)
 
 
+def render_card_full_preview(image_path: Path) -> Image.Image:
+    """Loads the full Scryfall card image as-is, in color, for on-screen
+    preview only. The printer always gets the dithered monochrome version
+    from render_card_full() below."""
+    return Image.open(image_path).convert("RGB")
+
+
 def render_card_full(image_path: Path, paper_width_mm: float = 80) -> Image.Image:
     """Loads the full Scryfall card image as-is (frame, art, and text baked
     in) and scales it to the paper's pixel width, preserving aspect ratio."""

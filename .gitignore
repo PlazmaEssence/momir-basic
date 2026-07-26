@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 venv/
 data/AtomicCards.json.gz
+data/SetList.json.gz
 data/momir.sqlite3
 *.db
 data/art_cache/*

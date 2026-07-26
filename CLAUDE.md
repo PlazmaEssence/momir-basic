@@ -55,8 +55,16 @@ superseded and kept only for reference.
 - `app/build_db.py` — turns `data/AtomicCards.json.gz` (MTGJSON) into the SQLite
   database. Keeps only entries whose `types` include Creature/Summon, skips
   `A-`-prefixed (Alchemy-only) names, and for multi-faced cards keeps only the front
-  face (`side` is `None`/`"a"`) using that face's own mana value. Fingerprints the
-  source file (mtime+size) in a `meta` table to skip rebuilding when nothing changed.
+  face (`side` is `None`/`"a"`) using that face's own mana value. Also drops cards
+  never printed in paper: it auto-downloads MTGJSON's `SetList.json.gz` (small,
+  unlike `AtomicCards.json.gz` this isn't a manual step) to `data/SetList.json.gz`
+  and excludes any card whose `printings` are *all* sets with `isOnlineOnly` set —
+  catches Arena-only cards that don't have the `A-` prefix. If `SetList.json.gz`
+  can't be fetched (no network), this filtering step is skipped rather than failing
+  the whole build. Fingerprints the source file (mtime+size) plus a `SCHEMA_VERSION`
+  constant in a `meta` table to skip rebuilding when nothing changed — bump
+  `SCHEMA_VERSION` whenever the filtering logic changes so existing installs rebuild
+  on next startup even though `AtomicCards.json.gz` itself didn't change.
 - `app/card_art.py` — Scryfall art lookup with an on-disk cache (`data/art_cache/`).
   All network failures are swallowed here; callers get `None` back and render a
   text-only card rather than an error.
@@ -73,6 +81,11 @@ superseded and kept only for reference.
   eventually surfaces as `[Errno 16] Resource busy` on print.
 - `app/printer/render.py` — composes name/mana cost/type/text/art into the single
   PIL image both drivers consume, sized off the configured `paper_width_mm`.
+  `render_card_full()` (full-card layout) dithers straight to monochrome for the
+  printer; `render_card_full_preview()` returns the same source image in color,
+  used only for the web preview in `_build_preview()` (`app/main.py`) — the token
+  stashed in `state.pending` still holds the dithered image, so `/api/print` always
+  prints B&W regardless of what the preview showed.
 - `app/static/` — vanilla HTML/CSS/JS, no build step, no CDN dependencies. The `/`
   route in `main.py` does not serve `index.html` as a static file as-is — it injects
   a content-hash query string (`?v=<md5>`) onto the `/static/app.js` and

@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from . import build_db, card_art, config as config_module, db
 from .printer import get_driver
-from .printer.render import render_card, render_card_full
+from .printer.render import render_card, render_card_full, render_card_full_preview
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -117,12 +117,15 @@ def _build_preview(card: dict) -> dict:
     if layout == "full_card" and art_enabled:
         full_path = card_art.fetch_art(card["name"], card.get("scryfall_oracle_id"), image_size="large")
         if full_path is not None:
+            # The printer always gets the dithered B&W render; the web
+            # preview shows the original color art instead.
             image = render_card_full(full_path, paper_width_mm=paper_width_mm)
+            preview_image = render_card_full_preview(full_path)
             token = state.remember(card, image)
             return {
                 "token": token,
                 "card": card,
-                "image": _image_to_data_url(image),
+                "image": _image_to_data_url(preview_image),
                 "art_used": True,
             }
         # full card image unavailable (offline/not found) — fall back to custom render below
@@ -184,6 +187,7 @@ def cmc_counts():
 def rebuild_db():
     try:
         build_db.download_atomic_cards()
+        build_db.download_set_list()
         result = build_db.build_database()
     except requests.RequestException as e:
         raise HTTPException(502, f"download failed: {e}")

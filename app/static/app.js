@@ -25,8 +25,14 @@ async function refreshStatus() {
   try {
     const health = await api("/api/health");
     const printer = health.printer;
-    const dot = printer.connected ? "●" : "○";
-    statusEl.textContent = `${health.card_count} cards · ${dot} ${printer.driver} · v${health.version}`;
+    statusEl.textContent = "";
+    const dot = document.createElement("span");
+    dot.className = `status-dot ${printer.connected ? "status-dot--connected" : "status-dot--disconnected"}`;
+    dot.title = printer.connected ? "Printer connected" : "Printer disconnected";
+    statusEl.appendChild(dot);
+    statusEl.appendChild(
+      document.createTextNode(`${health.card_count} cards · ${printer.driver} · v${health.version}`)
+    );
   } catch (e) {
     statusEl.textContent = "offline";
   }
