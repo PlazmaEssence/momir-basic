@@ -78,7 +78,11 @@ echo "==> Installing systemd service (user: $REAL_USER, dir: $PROJECT_DIR)"
 sed -e "s#__PROJECT_DIR__#${PROJECT_DIR}#g" -e "s#__USER__#${REAL_USER}#g" \
   "${PROJECT_DIR}/scripts/momir.service" > /etc/systemd/system/momir.service
 systemctl daemon-reload
-systemctl enable --now momir.service
+systemctl enable momir.service
+# restart (not just "enable --now") so re-running this script after a unit-file
+# or code change actually applies it, instead of silently no-op'ing on a
+# service that's already active
+systemctl restart momir.service
 
 echo "==> Granting momir-panel a scoped sudoers allowlist (systemctl on momir.service + nmcli)"
 SYSTEMCTL_BIN="$(command -v systemctl)"
@@ -101,7 +105,11 @@ echo "==> Installing momir-panel service (user: $REAL_USER, dir: $PROJECT_DIR, p
 sed -e "s#__PROJECT_DIR__#${PROJECT_DIR}#g" -e "s#__USER__#${REAL_USER}#g" \
   "${PROJECT_DIR}/scripts/momir-panel.service" > /etc/systemd/system/momir-panel.service
 systemctl daemon-reload
-systemctl enable --now momir-panel.service
+systemctl enable momir-panel.service
+# restart (not just "enable --now") so re-running this script after a
+# unit-file or code change actually applies it — see the momir.service
+# install above for why "enable --now" alone isn't enough here
+systemctl restart momir-panel.service
 
 cat <<EOF
 
