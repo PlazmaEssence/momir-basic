@@ -1,0 +1,14 @@
+[Unit]
+Description=Momir Vig shared printer service
+After=network.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__PROJECT_DIR__
+ExecStart=__PROJECT_DIR__/.venv/bin/uvicorn printsvc.main:app --host 127.0.0.1 --port 8002
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

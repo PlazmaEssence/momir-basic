@@ -74,27 +74,35 @@ nmcli connection modify "$CON_NAME" \
   wifi-sec.psk "$WIFI_PASSWORD"
 nmcli connection up "$CON_NAME"
 
-echo "==> Installing systemd service (user: $REAL_USER, dir: $PROJECT_DIR)"
-sed -e "s#__PROJECT_DIR__#${PROJECT_DIR}#g" -e "s#__USER__#${REAL_USER}#g" \
-  "${PROJECT_DIR}/scripts/momir.service" > /etc/systemd/system/momir.service
+echo "==> Installing systemd services (user: $REAL_USER, dir: $PROJECT_DIR)"
+for unit in momir-printsvc.service momir.service momir-upload.service; do
+  sed -e "s#__PROJECT_DIR__#${PROJECT_DIR}#g" -e "s#__USER__#${REAL_USER}#g" \
+    "${PROJECT_DIR}/scripts/${unit}" > "/etc/systemd/system/${unit}"
+done
 systemctl daemon-reload
-systemctl enable momir.service
+systemctl enable momir-printsvc.service momir.service momir-upload.service
 # restart (not just "enable --now") so re-running this script after a unit-file
 # or code change actually applies it, instead of silently no-op'ing on a
-# service that's already active
+# service that's already active. printsvc first since momir.service and
+# momir-upload.service both call it to actually print.
+systemctl restart momir-printsvc.service
 systemctl restart momir.service
+systemctl restart momir-upload.service
 
-echo "==> Granting momir-panel a scoped sudoers allowlist (systemctl on momir.service + nmcli)"
+echo "==> Granting momir-panel a scoped sudoers allowlist (systemctl on momir/printsvc/upload + nmcli)"
 SYSTEMCTL_BIN="$(command -v systemctl)"
 NMCLI_BIN="$(command -v nmcli)"
 SUDOERS_TMP="$(mktemp)"
 cat > "$SUDOERS_TMP" <<EOF
 # Managed by scripts/setup_pi_ap.sh — lets momir-panel.service (running as
-# $REAL_USER, not root) toggle momir.service and manage Wi-Fi without being
-# root itself. systemctl is pinned to exact momir.service invocations;
-# nmcli is granted broadly since its argument surface (arbitrary saved
-# connection names/SSIDs) doesn't work with literal-string sudoers pinning.
+# $REAL_USER, not root) toggle momir.service/momir-printsvc.service/
+# momir-upload.service and manage Wi-Fi without being root itself. systemctl
+# is pinned to exact per-service invocations; nmcli is granted broadly since
+# its argument surface (arbitrary saved connection names/SSIDs) doesn't work
+# with literal-string sudoers pinning.
 $REAL_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN start momir.service, $SYSTEMCTL_BIN stop momir.service, $SYSTEMCTL_BIN enable momir.service, $SYSTEMCTL_BIN disable momir.service
+$REAL_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN start momir-printsvc.service, $SYSTEMCTL_BIN stop momir-printsvc.service, $SYSTEMCTL_BIN enable momir-printsvc.service, $SYSTEMCTL_BIN disable momir-printsvc.service
+$REAL_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN start momir-upload.service, $SYSTEMCTL_BIN stop momir-upload.service, $SYSTEMCTL_BIN enable momir-upload.service, $SYSTEMCTL_BIN disable momir-upload.service
 $REAL_USER ALL=(root) NOPASSWD: $NMCLI_BIN
 EOF
 visudo -cf "$SUDOERS_TMP"
@@ -119,18 +127,24 @@ Wi-Fi network (fallback) : $SSID
 Password                 : $WIFI_PASSWORD
 Control panel            : http://momir.local  (or http://192.168.4.1)
 Print app                : http://momir.local:8000
+Print upload app         : http://momir.local:8001
 
 The control panel lets you add real Wi-Fi networks to join (in priority
 order) without SSH — wlan0 only falls back to broadcasting "$SSID" when
 none of those networks and no Ethernet connection are available. It also
-has Start/Stop and start-on-boot toggles for the print app.
+has Start/Stop and start-on-boot toggles for the print app, the print
+upload app, and the shared print service.
 
 Internet: plug eth0 into your router (DHCP) — wlan0 clients get NATed out
 through it automatically. Card art still works fine without it; cards just
 render without art.
 
-Check the app is running with:   sudo systemctl status momir.service
+Check the apps are running with: sudo systemctl status momir.service
+                                  sudo systemctl status momir-printsvc.service
+                                  sudo systemctl status momir-upload.service
 Check the panel is running with: sudo systemctl status momir-panel.service
 Watch logs with:                 journalctl -u momir.service -f
+                                  journalctl -u momir-printsvc.service -f
+                                  journalctl -u momir-upload.service -f
                                   journalctl -u momir-panel.service -f
 EOF

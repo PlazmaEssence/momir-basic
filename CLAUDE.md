@@ -9,11 +9,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+uvicorn printsvc.main:app --reload --port 8002 &
 uvicorn app.main:app --reload
 ```
 App runs at http://localhost:8000. First request triggers a one-time DB build from
 `data/AtomicCards.json.gz`, which must be downloaded manually and placed in `data/`
 (see README.md for the source URL) — it isn't committed to the repo.
+
+`printsvc` (port 8002) owns the actual printer connection; `app/main.py` calls it
+over HTTP rather than holding its own driver, so it needs to be running for
+printing or the Settings panel to work — see the Architecture section. To also
+run the upload app: `uvicorn upload.main:app --reload --port 8001`.
 
 ### Rebuild the card database manually
 ```bash
@@ -42,21 +48,33 @@ deploying a change is:
 ```bash
 ssh momir.local
 cd ~/momir && git pull origin main
+sudo systemctl restart momir-printsvc.service  # only if printsvc/ or app/printer/ changed
 sudo systemctl restart momir.service
-sudo systemctl restart momir-panel.service   # only if panel/ changed
+sudo systemctl restart momir-upload.service    # only if upload/ changed
+sudo systemctl restart momir-panel.service     # only if panel/ changed
 ```
 Networking is provisioned once via `scripts/setup_pi_ap.sh`, which also installs
-both systemd services and a sudoers grant — see the Architecture section below.
+all four systemd services and a sudoers grant — see the Architecture section below.
 
 ## Architecture
 
 - `app/main.py` — FastAPI app and all routes. Holds one in-process `AppState`:
-  current config, the active `printer_driver`, and an in-memory `pending` dict
-  mapping summon tokens to rendered images (capped at `MAX_PENDING`, oldest evicted
-  first). Summon/preview/search all funnel through `_build_preview()`, which renders
-  the card and stashes the image under a token; `/api/print` looks the token up and
-  hands the image to the driver. Nothing is persisted between summon and print — an
-  app restart drops any pending (summoned but not yet printed) card.
+  the local `art_config` (the "art" section of `data/config.json` — this app owns
+  writes to that section only, see the `printsvc/` bullet below for "printer"), and
+  an in-memory `pending` dict mapping summon tokens to rendered images (capped at
+  `MAX_PENDING`, oldest evicted first). Summon/preview/search all funnel through
+  `_build_preview()`, which renders the card and stashes the image under a token;
+  `/api/print` looks the token up and POSTs the rendered image to printsvc's
+  `/api/print` over `http://127.0.0.1:8002` (`MOMIR_PRINTSVC_URL` env var
+  override) rather than holding a driver itself. Nothing is persisted between
+  summon and print — an app restart drops any pending (summoned but not yet
+  printed) card. `_printer_render_config()` fetches `paper_width_mm`/`card_layout`
+  from printsvc for rendering, falling back to defaults (80mm/custom) if printsvc
+  is unreachable so summon/preview still work — the print itself then reports a
+  clear `{"ok": false, ...}` instead of silently succeeding. `GET`/`POST
+  /api/settings` proxy the "printer" portion straight through to printsvc so the
+  existing Settings UI in `app/static/` didn't need any changes; that means the
+  Settings panel requires printsvc to be reachable (503 otherwise).
 - `app/db.py` — read-only queries against `data/momir.sqlite3`. `random_creature_by_cmc()`
   implements the Momir Vig "walk outward" rule: if the requested mana value has zero
   matches, it tries ±1, ±2, ... up to `MAX_CMC_WALK` before giving up.
@@ -86,7 +104,40 @@ both systemd services and a sudoers grant — see the Architecture section below
   a driver instance must call `.close()` on the old one first** — python-escpos does
   not release a claimed USB interface on garbage collection, only on explicit
   `.close()` (`usb.util.dispose_resources()`). Skipping this leaks USB handles and
-  eventually surfaces as `[Errno 16] Resource busy` on print.
+  eventually surfaces as `[Errno 16] Resource busy` on print. Only `printsvc/main.py`
+  ever instantiates a driver (see below) — `app/main.py` and `upload/main.py` don't
+  import `app.printer.get_driver` at all, only `app.printer.render`/`upload.render`
+  for image composition.
+- `printsvc/` — a third, independent FastAPI app (own uvicorn process, own systemd
+  unit `momir-printsvc.service`, port 8002, bound to `127.0.0.1` only — it's an
+  internal dependency for the other two apps, not something phones/laptops on the
+  LAN talk to). It's the single process that calls `app.printer.get_driver()` and
+  holds the resulting `PrinterDriver`, so `app/main.py` (the card app) and
+  `upload/main.py` never each open their own connection to the same physical
+  printer and race for it — the `.close()`-before-replace constraint above is only
+  actually exercised in one place now. Owns the `"printer"` section of
+  `data/config.json` (paper width, driver/connection settings, `card_layout`);
+  `POST /api/settings` re-`load_config()`s from disk immediately before merging and
+  saving, so a near-simultaneous edit to the `"art"` section by `app/main.py`
+  (which does the same before writing its own section) is unlikely to be clobbered
+  — there's no file lock, this is a best-effort mitigation, acceptable given how
+  infrequently either section actually changes. `POST /api/print` takes a
+  base64-encoded PNG and hands it straight to the driver — no pending-token
+  bookkeeping, that's specific to the card app's summon flow.
+- `upload/` — a fourth FastAPI app (own systemd unit `momir-upload.service`, port
+  8001, bound to `0.0.0.0` like the card app since people upload from their own
+  phones/laptops). Lets anyone on the network print an arbitrary uploaded image or
+  a block of text on the same printer. `upload/render.py` reuses
+  `app.printer.render._width_for_paper()` and the bundled DejaVu fonts rather than
+  duplicating that logic; `render_image()` resizes to the paper's pixel width and
+  clamps runaway height to `MAX_IMAGE_HEIGHT_RATIO` (3x the paper width) so a
+  tall/high-res photo can't print a multi-foot receipt, and `render_text()`
+  word-wraps a block of text with an optional bold "title" first line and a
+  small/medium/large font-size choice. `POST /api/print/image` validates the
+  upload's content-type against an allowlist and caps its size
+  (`MAX_UPLOAD_BYTES`, 10MB) before handing bytes to PIL. Like `app/main.py`, it
+  never holds a `PrinterDriver` itself — it renders locally then POSTs the
+  finished image to printsvc's `/api/print`.
 - `app/printer/render.py` — composes name/mana cost/type/text/art into the single
   PIL image both drivers consume, sized off the configured `paper_width_mm`.
   `render_card_full()` (full-card layout) dithers straight to monochrome for the
@@ -107,17 +158,22 @@ both systemd services and a sudoers grant — see the Architecture section below
   saved-network mutation, via an `asyncio.Event` nudge). `panel/network.py` wraps
   `nmcli` for scanning, saved-network CRUD/reorder, and AP up/down; `connection
   .autoconnect-priority` on each saved nmcli profile is the only place ordering is
-  stored — no separate JSON list to drift out of sync. `panel/service_ctl.py` wraps
-  `systemctl`, scoped to `momir.service` only. Both wrapper modules check
-  `shutil.which(...)` and degrade to `{"supported": False}` rather than erroring,
-  the same "swallow and degrade" pattern `app/card_art.py` uses for offline art
-  lookups — this is what lets the panel run for frontend iteration on a Mac, where
-  neither binary exists. All subprocess calls pass argument lists, never a shell
-  string, since SSIDs/passwords are user-supplied. `panel/main.py` runs as the same
-  unprivileged user as `momir.service` (not root); it gets `systemctl
-  start/stop/enable/disable momir.service` and full `nmcli` access via a scoped
+  stored — no separate JSON list to drift out of sync. `panel/service_ctl.py`
+  wraps `systemctl` via a `ServiceController` class parametrized by unit name;
+  `panel/main.py` instantiates one per managed service (`momir.service`,
+  `momir-printsvc.service`, `momir-upload.service`) and registers the same four
+  routes (`status`/`start`/`stop`/`enable`/`disable` under `/api/<prefix>/...`)
+  for each via a loop, rather than tripling the route definitions. Both wrapper
+  modules check `shutil.which(...)` and degrade to `{"supported": False}` rather
+  than erroring, the same "swallow and degrade" pattern `app/card_art.py` uses for
+  offline art lookups — this is what lets the panel run for frontend iteration on
+  a Mac, where neither binary exists. All subprocess calls pass argument lists,
+  never a shell string, since SSIDs/passwords are user-supplied. `panel/main.py`
+  runs as the same unprivileged user as the services it controls (not root); it
+  gets `systemctl start/stop/enable/disable` on each of the three managed units
+  (twelve literal invocations total) plus full `nmcli` access via a scoped
   `/etc/sudoers.d/momir-panel` grant installed by `setup_pi_ap.sh` (systemctl is
-  pinned to those four literal invocations; nmcli is granted broadly, since its
+  pinned to those literal invocations; nmcli is granted broadly, since its
   argument surface — arbitrary saved connection names/SSIDs — doesn't work with
   literal-string sudoers pinning). Binding port 80 as non-root needs
   `AmbientCapabilities=CAP_NET_BIND_SERVICE` in `scripts/momir-panel.service`. That
@@ -141,9 +197,11 @@ both systemd services and a sudoers grant — see the Architecture section below
   priority also makes the AP NetworkManager's own last resort as defense in depth.
   Deletes the old `momir-home`/`momir-hotspot` client profiles from the
   now-removed `setup_pi_wifi.sh` so they don't compete for `wlan0`. Also sets up
-  avahi for `http://momir.local`, installs `scripts/momir.service` and
-  `scripts/momir-panel.service` as systemd units, and installs the
-  `/etc/sudoers.d/momir-panel` grant described above.
+  avahi for `http://momir.local`, installs `scripts/momir-printsvc.service`,
+  `scripts/momir.service`, `scripts/momir-upload.service`, and
+  `scripts/momir-panel.service` as systemd units (printsvc first, then the two
+  apps that depend on it), and installs the `/etc/sudoers.d/momir-panel` grant
+  described above.
 
 ## Outstanding work
 

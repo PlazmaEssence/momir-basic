@@ -62,6 +62,54 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Momir Vig Control Panel", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+_SERVICE_CONTROLLERS = {
+    "momir": service_ctl.ServiceController("momir.service"),
+    "printsvc": service_ctl.ServiceController("momir-printsvc.service"),
+    "upload": service_ctl.ServiceController("momir-upload.service"),
+}
+
+
+def _register_service_routes(prefix: str, controller: service_ctl.ServiceController) -> None:
+    @app.get(f"/api/{prefix}/status")
+    def _status():
+        return controller.status()
+
+    @app.post(f"/api/{prefix}/start")
+    def _start():
+        try:
+            controller.start()
+        except RuntimeError as e:
+            raise HTTPException(500, str(e))
+        return controller.status()
+
+    @app.post(f"/api/{prefix}/stop")
+    def _stop():
+        try:
+            controller.stop()
+        except RuntimeError as e:
+            raise HTTPException(500, str(e))
+        return controller.status()
+
+    @app.post(f"/api/{prefix}/enable")
+    def _enable():
+        try:
+            controller.enable()
+        except RuntimeError as e:
+            raise HTTPException(500, str(e))
+        return controller.status()
+
+    @app.post(f"/api/{prefix}/disable")
+    def _disable():
+        try:
+            controller.disable()
+        except RuntimeError as e:
+            raise HTTPException(500, str(e))
+        return controller.status()
+
+
+for _prefix, _controller in _SERVICE_CONTROLLERS.items():
+    _register_service_routes(_prefix, _controller)
+
 
 class AddNetworkRequest(BaseModel):
     ssid: str
@@ -82,47 +130,6 @@ def index():
     for asset in ("style.css", "app.js"):
         html = html.replace(f"/static/{asset}", f"/static/{asset}?v={_asset_version(asset)}")
     return HTMLResponse(html)
-
-
-@app.get("/api/momir/status")
-def momir_status():
-    return service_ctl.status()
-
-
-@app.post("/api/momir/start")
-def momir_start():
-    try:
-        service_ctl.start()
-    except RuntimeError as e:
-        raise HTTPException(500, str(e))
-    return service_ctl.status()
-
-
-@app.post("/api/momir/stop")
-def momir_stop():
-    try:
-        service_ctl.stop()
-    except RuntimeError as e:
-        raise HTTPException(500, str(e))
-    return service_ctl.status()
-
-
-@app.post("/api/momir/enable")
-def momir_enable():
-    try:
-        service_ctl.enable()
-    except RuntimeError as e:
-        raise HTTPException(500, str(e))
-    return service_ctl.status()
-
-
-@app.post("/api/momir/disable")
-def momir_disable():
-    try:
-        service_ctl.disable()
-    except RuntimeError as e:
-        raise HTTPException(500, str(e))
-    return service_ctl.status()
 
 
 @app.get("/api/network/status")
