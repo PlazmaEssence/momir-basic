@@ -55,6 +55,13 @@ Outstanding work and ideas for Momir Vig.
       driver. `panel/service_ctl.py` is now parametrized by unit name so the
       control panel has start/stop/start-on-boot cards for all three backend
       services, not just `momir.service`.
+- [x] **Deckless life/hand/land tracker.** Since games are actually played with
+      two piles of basic lands rather than real decks, add a toggle-able panel
+      on the main page for tracking life, cards in hand, and lands in play by
+      hand — no more pen and paper. Defaults to 2 players, life 20 / hand 7 /
+      lands 0 each; supports adding/removing players for multiplayer (1-8) and
+      a "Reset Game" button (with a confirm dialog) that puts every player back
+      at the defaults. Pure client-side (`localStorage`), no backend involved.
 
 ## Known issues
 

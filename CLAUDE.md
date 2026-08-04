@@ -149,7 +149,13 @@ all four systemd services and a sudoers grant — see the Architecture section b
   route in `main.py` does not serve `index.html` as a static file as-is — it injects
   a content-hash query string (`?v=<md5>`) onto the `/static/app.js` and
   `/static/style.css` URLs so browsers can't silently keep serving a stale cached
-  copy after a deploy.
+  copy after a deploy. Also holds a toggle-able life/hand/land tracker (for games
+  played with two piles of basic lands instead of real decks) that's entirely
+  client-side — state (enabled flag + per-player life/hand/lands) lives in
+  `localStorage` under `momir_tracker_state`, no server route involved. Player
+  count (1-8, default 2) and the three per-player counters are rendered fresh
+  from that state on every mutation; "Reset Game" puts every current player back
+  to 20 life / 7 cards / 0 lands after a `window.confirm()`.
 - `panel/` — a second, independent FastAPI app (own uvicorn process, own systemd
   unit `momir-panel.service`, port 80) that's always on regardless of whether the
   print app itself is running — that's the point of it. `panel/main.py` holds the
