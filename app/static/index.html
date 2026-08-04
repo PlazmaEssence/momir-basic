@@ -13,6 +13,42 @@
 </header>
 
 <main>
+  <section class="tracker-toggle-bar">
+    <label class="checkbox">
+      <input type="checkbox" id="tracker-toggle">
+      Life / Hand / Land Tracker
+    </label>
+  </section>
+
+  <section id="tracker-panel" class="tracker-panel hidden">
+    <div id="tracker-players" class="tracker-players"></div>
+    <div class="tracker-footer">
+      <button id="tracker-add-player" type="button">+ Add Player</button>
+      <button id="tracker-reset" type="button" class="danger-btn">Reset Game</button>
+    </div>
+  </section>
+
+  <template id="icon-life">
+    <svg viewBox="0 0 32 29" class="stat-icon-svg" aria-hidden="true">
+      <path d="M16 29 C16 29 0 18.5 0 8.5 C0 3.8 3.8 0 8.5 0 C12 0 14.8 2.1 16 5.2 C17.2 2.1 20 0 23.5 0 C28.2 0 32 3.8 32 8.5 C32 18.5 16 29 16 29 Z"/>
+    </svg>
+  </template>
+
+  <template id="icon-hand">
+    <svg viewBox="0 0 34 36" class="stat-icon-svg" aria-hidden="true">
+      <rect x="11" y="2" width="20" height="24" rx="3" class="stat-icon-bg"/>
+      <rect x="3" y="10" width="20" height="24" rx="3"/>
+    </svg>
+  </template>
+
+  <template id="icon-land">
+    <svg viewBox="0 0 600 480" class="stat-icon-svg" aria-hidden="true">
+      <rect x="8" y="370" width="584" height="104" rx="52"/>
+      <path d="M60 460 L195 40 Q218 0 241 40 L372 300 Z"/>
+      <path d="M340 320 L405 160 Q428 120 451 160 L566 430 Z"/>
+    </svg>
+  </template>
+
   <section class="summon-panel">
     <label for="cmc-input">Mana Value</label>
     <div class="stepper">

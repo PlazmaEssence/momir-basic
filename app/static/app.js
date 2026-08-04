@@ -219,3 +219,148 @@ refreshStatus();
 loadSettings();
 loadCmcCounts();
 setInterval(refreshStatus, 15000);
+
+// Life / hand / land tracker (client-side only, no deck needed)
+const TRACKER_KEY = "momir_tracker_state";
+const MIN_PLAYERS = 1;
+const MAX_PLAYERS = 8;
+const DEFAULT_LIFE = 20;
+const DEFAULT_HAND = 7;
+const DEFAULT_LANDS = 0;
+
+function defaultPlayer() {
+  return { life: DEFAULT_LIFE, hand: DEFAULT_HAND, lands: DEFAULT_LANDS };
+}
+
+function loadTrackerState() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TRACKER_KEY));
+    if (parsed && Array.isArray(parsed.players) && parsed.players.length > 0) {
+      return parsed;
+    }
+  } catch (e) {
+    // ignore malformed/missing state, fall through to defaults
+  }
+  return { enabled: false, players: [defaultPlayer(), defaultPlayer()] };
+}
+
+const trackerState = loadTrackerState();
+
+function saveTrackerState() {
+  localStorage.setItem(TRACKER_KEY, JSON.stringify(trackerState));
+}
+
+function clampStat(stat, value) {
+  return stat === "life" ? value : Math.max(0, value);
+}
+
+const trackerToggle = document.getElementById("tracker-toggle");
+const trackerPanel = document.getElementById("tracker-panel");
+const trackerPlayersEl = document.getElementById("tracker-players");
+const addPlayerBtn = document.getElementById("tracker-add-player");
+const trackerResetBtn = document.getElementById("tracker-reset");
+const trackerIcons = {
+  life: document.getElementById("icon-life"),
+  hand: document.getElementById("icon-hand"),
+  lands: document.getElementById("icon-lands") || document.getElementById("icon-land"),
+};
+const statLabels = { life: "life", hand: "cards in hand", lands: "lands" };
+
+function buildStatRow(playerIdx, stat) {
+  const row = document.createElement("div");
+  row.className = `stat-row stat-row--${stat}`;
+  row.title = statLabels[stat];
+  row.appendChild(trackerIcons[stat].content.cloneNode(true));
+
+  const down = document.createElement("button");
+  down.type = "button";
+  down.className = "stat-btn";
+  down.textContent = "−";
+  down.setAttribute("aria-label", `decrease ${statLabels[stat]} for player ${playerIdx + 1}`);
+
+  const val = document.createElement("span");
+  val.className = "stat-value";
+  val.textContent = trackerState.players[playerIdx][stat];
+
+  const up = document.createElement("button");
+  up.type = "button";
+  up.className = "stat-btn";
+  up.textContent = "+";
+  up.setAttribute("aria-label", `increase ${statLabels[stat]} for player ${playerIdx + 1}`);
+
+  function applyDelta(delta) {
+    const player = trackerState.players[playerIdx];
+    player[stat] = clampStat(stat, player[stat] + delta);
+    val.textContent = player[stat];
+    saveTrackerState();
+  }
+  down.addEventListener("click", () => applyDelta(-1));
+  up.addEventListener("click", () => applyDelta(1));
+
+  row.appendChild(down);
+  row.appendChild(val);
+  row.appendChild(up);
+  return row;
+}
+
+function renderTracker() {
+  trackerPlayersEl.innerHTML = "";
+  trackerState.players.forEach((player, idx) => {
+    const card = document.createElement("div");
+    card.className = "player-card";
+
+    const header = document.createElement("div");
+    header.className = "player-card-header";
+    const name = document.createElement("span");
+    name.textContent = `Player ${idx + 1}`;
+    header.appendChild(name);
+    if (trackerState.players.length > MIN_PLAYERS) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "player-remove";
+      removeBtn.textContent = "✕";
+      removeBtn.setAttribute("aria-label", `Remove player ${idx + 1}`);
+      removeBtn.addEventListener("click", () => {
+        trackerState.players.splice(idx, 1);
+        saveTrackerState();
+        renderTracker();
+      });
+      header.appendChild(removeBtn);
+    }
+    card.appendChild(header);
+
+    card.appendChild(buildStatRow(idx, "life"));
+    card.appendChild(buildStatRow(idx, "hand"));
+    card.appendChild(buildStatRow(idx, "lands"));
+
+    trackerPlayersEl.appendChild(card);
+  });
+  addPlayerBtn.disabled = trackerState.players.length >= MAX_PLAYERS;
+}
+
+trackerToggle.checked = trackerState.enabled;
+trackerPanel.classList.toggle("hidden", !trackerState.enabled);
+
+trackerToggle.addEventListener("change", () => {
+  trackerState.enabled = trackerToggle.checked;
+  trackerPanel.classList.toggle("hidden", !trackerState.enabled);
+  saveTrackerState();
+});
+
+addPlayerBtn.addEventListener("click", () => {
+  if (trackerState.players.length >= MAX_PLAYERS) return;
+  trackerState.players.push(defaultPlayer());
+  saveTrackerState();
+  renderTracker();
+});
+
+trackerResetBtn.addEventListener("click", () => {
+  if (!window.confirm(`Reset all players to ${DEFAULT_LIFE} life, ${DEFAULT_HAND} cards, ${DEFAULT_LANDS} lands?`)) {
+    return;
+  }
+  trackerState.players = trackerState.players.map(() => defaultPlayer());
+  saveTrackerState();
+  renderTracker();
+});
+
+renderTracker();
