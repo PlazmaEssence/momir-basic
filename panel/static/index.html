@@ -57,6 +57,20 @@
   </section>
 
   <section class="panel">
+    <h2>ESP32 display service</h2>
+    <div id="esp32svc-status" class="status">connecting…</div>
+    <div class="btn-row">
+      <button id="esp32svc-start-btn">Start</button>
+      <button id="esp32svc-stop-btn">Stop</button>
+    </div>
+    <label class="switch-row">
+      <input type="checkbox" id="esp32svc-boot-toggle" disabled>
+      Start on boot
+    </label>
+    <span id="esp32svc-action-result" class="action-result"></span>
+  </section>
+
+  <section class="panel">
     <h2>Network</h2>
     <div id="network-status" class="status">connecting…</div>
 

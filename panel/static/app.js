@@ -16,9 +16,9 @@ function statusDot(ok, neutral) {
   return dot;
 }
 
-// Managed services: print app, print upload app, shared print service.
-// Each has identical start/stop/enable-on-boot controls, so one function
-// wires up all three instead of tripling the same code.
+// Managed services: print app, print upload app, shared print service, ESP32
+// display service. Each has identical start/stop/enable-on-boot controls, so
+// one function wires up all of them instead of repeating the same code.
 function setupServiceCard(prefix, linkPort) {
   const statusEl = document.getElementById(`${prefix}-status`);
   const startBtn = document.getElementById(`${prefix}-start-btn`);
@@ -78,6 +78,7 @@ function setupServiceCard(prefix, linkPort) {
 const refreshMomirStatus = setupServiceCard("momir", 8000);
 const refreshUploadStatus = setupServiceCard("upload", 8001);
 const refreshPrintsvcStatus = setupServiceCard("printsvc", null);
+const refreshEsp32svcStatus = setupServiceCard("esp32svc", null);
 
 // Network
 const networkStatusEl = document.getElementById("network-status");
@@ -238,6 +239,7 @@ rescanBtn.addEventListener("click", () => {
 refreshMomirStatus();
 refreshUploadStatus();
 refreshPrintsvcStatus();
+refreshEsp32svcStatus();
 refreshNetworkStatus();
 refreshSavedNetworks();
 refreshScan();
@@ -245,6 +247,7 @@ setInterval(() => {
   refreshMomirStatus();
   refreshUploadStatus();
   refreshPrintsvcStatus();
+  refreshEsp32svcStatus();
   refreshNetworkStatus();
   refreshSavedNetworks();
 }, 15000);

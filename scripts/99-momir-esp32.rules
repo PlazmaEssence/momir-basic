@@ -1,0 +1,12 @@
+# Managed by scripts/setup_pi_ap.sh — gives the ESP32 display/control panel a
+# stable device name regardless of which /dev/ttyUSB*/ttyACM* it enumerates
+# as after a reboot or replug (esp32svc reads MOMIR_ESP32_SERIAL_PORT, which
+# defaults to /dev/momir-esp32).
+#
+# The vendor/product ID below defaults to Silicon Labs' CP2102 (10c4:ea60),
+# the most common USB-UART bridge chip on cheap ESP32 dev boards. If your
+# board enumerates differently (e.g. CH340 at 1a86:7523, or native USB CDC
+# on an ESP32-S2/S3 at 303a:xxxx), override MOMIR_ESP32_USB_VENDOR_ID /
+# MOMIR_ESP32_USB_PRODUCT_ID when running setup_pi_ap.sh. Confirm the actual
+# IDs for your board with: udevadm info -a -n /dev/ttyUSB0 | grep -i idVendor
+SUBSYSTEM=="tty", ATTRS{idVendor}=="__ESP32_USB_VENDOR_ID__", ATTRS{idProduct}=="__ESP32_USB_PRODUCT_ID__", SYMLINK+="momir-esp32"

@@ -138,6 +138,29 @@ all four systemd services and a sudoers grant — see the Architecture section b
   (`MAX_UPLOAD_BYTES`, 10MB) before handing bytes to PIL. Like `app/main.py`, it
   never holds a `PrinterDriver` itself — it renders locally then POSTs the
   finished image to printsvc's `/api/print`.
+- `esp32svc/` — a fifth FastAPI app (own systemd unit `momir-esp32svc.service`,
+  port 8003, bound to `127.0.0.1` only, same internal-dependency role as
+  printsvc). Owns the wired USB/serial link to an optional physical control
+  panel (a 2.8" ESP32 LVGL touchscreen, `firmware/esp32_display/`) that lets a
+  player pick a mana value with +/- and hold a button to summon+print without
+  a phone/laptop. `esp32svc/serial_bridge.py` reads newline-delimited JSON
+  commands off the port (`{"cmd": "summon_print", "cmc": N}`) and drives them
+  by calling `app/main.py`'s existing `POST /api/summon` then `POST
+  /api/print` over `http://127.0.0.1:8000` (`MOMIR_ESP32_APP_URL` override) —
+  the same two calls the browser UI makes, so `app/main.py` needed no changes.
+  pyserial is synchronous, so the read loop runs in a background thread
+  (started/stopped in the FastAPI lifespan) rather than as an asyncio task
+  like `panel/main.py`'s `ReconcileLoop`. The port is opened lazily and
+  reopened with backoff on any error — same "swallow and degrade" pattern as
+  `app/card_art.py` and `escpos_driver.py` — so an unplugged or not-yet-flashed
+  ESP32 doesn't take the service down. `MOMIR_ESP32_SERIAL_PORT` defaults to
+  `/dev/momir-esp32`, a stable name from the udev rule installed by
+  `setup_pi_ap.sh` (see below) rather than whatever `/dev/ttyUSB*`/`ttyACM*`
+  the board happens to enumerate as. The firmware itself
+  (`firmware/esp32_display/`, a PlatformIO project) has the LVGL UI and serial
+  protocol client written, but its display/touch driver config (`lv_conf.h`,
+  TFT_eSPI `User_Setup.h`, touch chip selection) is intentionally left as
+  board-specific TODOs — see that directory's README.
 - `app/printer/render.py` — composes name/mana cost/type/text/art into the single
   PIL image both drivers consume, sized off the configured `paper_width_mm`.
   `render_card_full()` (full-card layout) dithers straight to monochrome for the
@@ -167,8 +190,9 @@ all four systemd services and a sudoers grant — see the Architecture section b
   stored — no separate JSON list to drift out of sync. `panel/service_ctl.py`
   wraps `systemctl` via a `ServiceController` class parametrized by unit name;
   `panel/main.py` instantiates one per managed service (`momir.service`,
-  `momir-printsvc.service`, `momir-upload.service`) and registers the same four
-  routes (`status`/`start`/`stop`/`enable`/`disable` under `/api/<prefix>/...`)
+  `momir-printsvc.service`, `momir-upload.service`, `momir-esp32svc.service`)
+  and registers the same four routes
+  (`status`/`start`/`stop`/`enable`/`disable` under `/api/<prefix>/...`)
   for each via a loop, rather than tripling the route definitions. Both wrapper
   modules check `shutil.which(...)` and degrade to `{"supported": False}` rather
   than erroring, the same "swallow and degrade" pattern `app/card_art.py` uses for
@@ -176,8 +200,8 @@ all four systemd services and a sudoers grant — see the Architecture section b
   a Mac, where neither binary exists. All subprocess calls pass argument lists,
   never a shell string, since SSIDs/passwords are user-supplied. `panel/main.py`
   runs as the same unprivileged user as the services it controls (not root); it
-  gets `systemctl start/stop/enable/disable` on each of the three managed units
-  (twelve literal invocations total) plus full `nmcli` access via a scoped
+  gets `systemctl start/stop/enable/disable` on each of the four managed units
+  (sixteen literal invocations total) plus full `nmcli` access via a scoped
   `/etc/sudoers.d/momir-panel` grant installed by `setup_pi_ap.sh` (systemctl is
   pinned to those literal invocations; nmcli is granted broadly, since its
   argument surface — arbitrary saved connection names/SSIDs — doesn't work with
@@ -204,10 +228,14 @@ all four systemd services and a sudoers grant — see the Architecture section b
   Deletes the old `momir-home`/`momir-hotspot` client profiles from the
   now-removed `setup_pi_wifi.sh` so they don't compete for `wlan0`. Also sets up
   avahi for `http://momir.local`, installs `scripts/momir-printsvc.service`,
-  `scripts/momir.service`, `scripts/momir-upload.service`, and
-  `scripts/momir-panel.service` as systemd units (printsvc first, then the two
-  apps that depend on it), and installs the `/etc/sudoers.d/momir-panel` grant
-  described above.
+  `scripts/momir.service`, `scripts/momir-upload.service`,
+  `scripts/momir-esp32svc.service`, and `scripts/momir-panel.service` as
+  systemd units (printsvc first, then the apps that depend on it), installs
+  `scripts/99-momir-esp32.rules` as a udev rule mapping the ESP32's USB
+  vendor/product ID (`MOMIR_ESP32_USB_VENDOR_ID`/`MOMIR_ESP32_USB_PRODUCT_ID`
+  env vars, defaulting to the common CP2102 USB-serial chip's IDs) to a
+  stable `/dev/momir-esp32`, and installs the `/etc/sudoers.d/momir-panel`
+  grant described above.
 
 ## Outstanding work
 

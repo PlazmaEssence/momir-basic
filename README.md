@@ -19,10 +19,15 @@ your own uploaded images or text on the same printer.
   to match the paper width.
 - On a Raspberry Pi, a control panel at `http://momir.local` (port 80)
   manages an ordered list of Wi-Fi networks for `wlan0` to join, and
-  start/stop/start-on-boot toggles for all three backend services; it falls
+  start/stop/start-on-boot toggles for all backend services; it falls
   back to broadcasting its own access point (`MomirVig`) only when none of
   those networks and no Ethernet connection are available. `eth0` provides
   internet (for card art) via a plain Ethernet connection.
+- An optional physical control panel: a 2.8" ESP32 touchscreen wired to the
+  Pi over USB for a +/- mana-value selector and a hold-to-summon button, no
+  phone/laptop needed. `esp32svc/` (port 8003) owns the serial link and
+  drives it by calling the same `/api/summon` / `/api/print` endpoints the
+  browser UI uses. See `firmware/esp32_display/README.md` for the firmware.
 
 ## Requirements
 
@@ -84,14 +89,18 @@ startups after the first are instant.
    gets internet — for card art — regardless of Wi-Fi).
 5. Run the provisioning script — this creates the `MomirVig` fallback
    access point on `wlan0`, sets up `http://momir.local`, and installs the
-   print app, the print upload app, the shared print service, and the
-   control panel as systemd services that start on boot:
+   print app, the print upload app, the shared print service, the ESP32
+   display service, and the control panel as systemd services that start on
+   boot:
    ```bash
    sudo bash scripts/setup_pi_ap.sh
    ```
    Defaults to SSID `MomirVig`; override with `MOMIR_SSID` /
    `MOMIR_WIFI_PASSWORD` env vars if you want something else (password
-   must be 8+ characters).
+   must be 8+ characters). If you're setting up the ESP32 display, also see
+   step 8 below before or after this — the udev rule it installs defaults to
+   the CP2102 USB-serial chip's vendor/product ID, which may not match your
+   board.
 6. Connect your phone/laptop to the `MomirVig` Wi-Fi network and open
    `http://momir.local` (or `http://192.168.4.1`) — the control panel. From
    there, add your real Wi-Fi network(s) under "Network" (reorder them if
@@ -117,6 +126,15 @@ startups after the first are instant.
      | sudo tee /etc/udev/rules.d/99-momir-printer.rules
    sudo udevadm control --reload-rules && sudo udevadm trigger
    ```
+8. (Optional) ESP32 display: flash the firmware in `firmware/esp32_display/`
+   (see its README for the display/touch driver setup that's specific to
+   your board), then plug it into the Pi over USB — one cable for both
+   power and the serial link `esp32svc` reads. `scripts/setup_pi_ap.sh`
+   already installs a udev rule mapping it to `/dev/momir-esp32`; if it
+   doesn't show up, check the board's actual USB vendor/product ID with
+   `udevadm info -a -n /dev/ttyUSB0 | grep -i idVendor` and re-run the
+   provisioning script with `MOMIR_ESP32_USB_VENDOR_ID` /
+   `MOMIR_ESP32_USB_PRODUCT_ID` set to match.
 
 **Card art needs internet.** Plug `eth0` into your router; NetworkManager
 NATs `wlan0` clients out through it automatically, no extra configuration
@@ -128,21 +146,23 @@ Useful commands on the Pi:
 sudo systemctl status momir.service           # is the print app running?
 sudo systemctl status momir-printsvc.service  # is the shared print service running?
 sudo systemctl status momir-upload.service    # is the upload app running?
+sudo systemctl status momir-esp32svc.service  # is the ESP32 display service running?
 sudo systemctl status momir-panel.service     # is the control panel running?
 journalctl -u momir.service -f                # print app logs
 journalctl -u momir-printsvc.service -f       # print service logs
 journalctl -u momir-upload.service -f         # upload app logs
+journalctl -u momir-esp32svc.service -f       # ESP32 display service logs
 journalctl -u momir-panel.service -f          # control panel logs
 sudo systemctl restart momir-printsvc.service # after editing config.json by hand
 nmcli -f NAME,AUTOCONNECT-PRIORITY connection show   # saved Wi-Fi networks + priority
 ```
 
-The print app, the upload app, and the shared print service can each be
-started/stopped and included in or excluded from boot from the control
-panel UI, no SSH needed. `momir-printsvc.service` owns the actual printer
-connection — the print app and the upload app both call it to print, so it
-needs to be running for either of them to actually print (though their web
-UIs still load without it).
+The print app, the upload app, the shared print service, and the ESP32
+display service can each be started/stopped and included in or excluded
+from boot from the control panel UI, no SSH needed. `momir-printsvc.service`
+owns the actual printer connection — the print app and the upload app both
+call it to print, so it needs to be running for either of them to actually
+print (though their web UIs still load without it).
 
 ## Card pool
 
@@ -184,20 +204,31 @@ upload/
   static/                vanilla HTML/CSS/JS upload page
 panel/
   main.py               FastAPI app: start/stop/boot-toggle for momir.service,
-                        momir-printsvc.service, momir-upload.service + Wi-Fi
-                        management, port 80
+                        momir-printsvc.service, momir-upload.service,
+                        momir-esp32svc.service + Wi-Fi management, port 80
   network.py             nmcli wrapper (scan, saved networks, AP fallback)
   service_ctl.py           systemctl wrapper, parametrized by unit name
   static/                    vanilla HTML/CSS/JS control panel page
+esp32svc/
+  main.py               FastAPI app: owns the serial link to the ESP32
+                        display, port 8003 (127.0.0.1 only)
+  serial_bridge.py        reads summon_print commands off the wire, drives
+                          them via app/main.py's HTTP API, writes results back
+firmware/
+  esp32_display/          PlatformIO project for the ESP32 (LVGL UI + serial
+                          protocol client) — see its README for board-specific
+                          display/touch driver setup needed before it builds
 data/
   AtomicCards.json.gz    source data (you provide)
   momir.sqlite3            generated
   art_cache/                cached art
   config.json                printer/art settings (printsvc owns "printer")
 scripts/
-  setup_pi_ap.sh            Pi-only: Wi-Fi access point (MomirVig) fallback + all four systemd services + sudoers
+  setup_pi_ap.sh            Pi-only: Wi-Fi access point (MomirVig) fallback + all systemd services + sudoers + ESP32 udev rule
   momir.service             systemd unit template (print app, port 8000)
   momir-printsvc.service    systemd unit template (print service, port 8002)
   momir-upload.service      systemd unit template (upload app, port 8001)
+  momir-esp32svc.service    systemd unit template (ESP32 display service, port 8003)
   momir-panel.service       systemd unit template (control panel, port 80)
+  99-momir-esp32.rules      udev rule template: stable /dev/momir-esp32 symlink
 ```
