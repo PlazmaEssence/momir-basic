@@ -4,3 +4,4 @@ pillow
 python-escpos
 requests
 python-multipart
+pyserial

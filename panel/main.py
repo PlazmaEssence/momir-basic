@@ -66,6 +66,7 @@ _SERVICE_CONTROLLERS = {
     "momir": service_ctl.ServiceController("momir.service"),
     "printsvc": service_ctl.ServiceController("momir-printsvc.service"),
     "upload": service_ctl.ServiceController("momir-upload.service"),
+    "esp32svc": service_ctl.ServiceController("momir-esp32svc.service"),
 }
 
 

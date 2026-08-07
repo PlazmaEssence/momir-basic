@@ -1,0 +1,14 @@
+[Unit]
+Description=Momir Vig ESP32 display/control panel service
+After=network.target momir.service
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__PROJECT_DIR__
+ExecStart=__PROJECT_DIR__/.venv/bin/uvicorn esp32svc.main:app --host 127.0.0.1 --port 8003
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

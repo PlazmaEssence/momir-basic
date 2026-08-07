@@ -62,6 +62,19 @@ Outstanding work and ideas for Momir Vig.
       lands 0 each; supports adding/removing players for multiplayer (1-8) and
       a "Reset Game" button (with a confirm dialog) that puts every player back
       at the defaults. Pure client-side (`localStorage`), no backend involved.
+- [ ] **ESP32 physical display/control panel.** A 2.8" ESP32 LVGL touchscreen
+      wired to the Pi over USB as a physical alternative to the browser UI:
+      +/- to pick a mana value, hold a button to summon+print, no card art
+      shown on screen. New `esp32svc/` (port 8003, 127.0.0.1 only) owns the
+      serial link and drives it by calling `app/main.py`'s existing
+      `/api/summon` + `/api/print` over HTTP — no changes to the card app
+      itself. Backend (`esp32svc/`, systemd unit,
+      udev rule, panel integration) is done and smoke-tested against a
+      virtual serial port; `firmware/esp32_display/` has the LVGL UI +
+      serial protocol logic but still needs board-specific display/touch
+      driver configuration (`lv_conf.h`, TFT_eSPI `User_Setup.h`, touch chip
+      wiring) filled in once actual hardware is in hand — see that
+      directory's README.
 
 ## Known issues
 
