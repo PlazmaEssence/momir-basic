@@ -22,6 +22,7 @@
 #include <ArduinoJson.h>
 #include <lvgl.h>
 #include <TFT_eSPI.h>
+#include <XPT2046_Bitbang.h>
 
 // ---- Tunables --------------------------------------------------------
 
@@ -52,14 +53,41 @@ static void disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *c
   lv_disp_flush_ready(disp);
 }
 
-// TODO: fill in for the board's actual touch chip (XPT2046 resistive or
-// GT911 capacitive are the common options on these 2.8" panels) — see
-// README.md. Returning false/not pressed keeps the build compiling with the
-// touch axis effectively disabled until this is wired up.
+// Board is a JC2432S028R ("Cheap Yellow Display"). Its XPT2046 touch chip is
+// NOT on the display's SPI bus — it's wired to a separate set of GPIOs, so
+// it's driven here by a bit-banged driver on its own pins rather than
+// TFT_eSPI's built-in TOUCH_CS support (which assumes a shared bus and
+// silently reads nothing on this board).
+static const int TOUCH_MOSI = 32;
+static const int TOUCH_MISO = 39;
+static const int TOUCH_CLK = 25;
+static const int TOUCH_CS = 33;
+
+static XPT2046_Bitbang ts(TOUCH_MOSI, TOUCH_MISO, TOUCH_CLK, TOUCH_CS, SCREEN_W, SCREEN_H);
+
+// CALIBRATION: raw ADC min/max measured live against a physical JC2432S028R
+// panel — no axis swap needed, raw X/Y map directly to screen X/Y.
+static const uint16_t TOUCH_RAW_X_MIN = 200;
+static const uint16_t TOUCH_RAW_X_MAX = 3900;
+static const uint16_t TOUCH_RAW_Y_MIN = 200;
+static const uint16_t TOUCH_RAW_Y_MAX = 3900;
+
+static void touch_init() {
+  ts.begin();
+  ts.setCalibration(TOUCH_RAW_X_MIN, TOUCH_RAW_X_MAX, TOUCH_RAW_Y_MIN, TOUCH_RAW_Y_MAX);
+}
+
+// NOTE: don't Serial.print/printf from this path — Serial is the same UART
+// esp32svc reads newline-delimited JSON from (see file header), and a
+// stray debug line here breaks its parser.
 static bool touch_read_raw(int16_t *x, int16_t *y) {
-  (void)x;
-  (void)y;
-  return false;
+  TouchPoint p = ts.getTouch();
+  if (p.zRaw == 0) {
+    return false;
+  }
+  *x = constrain(p.x, 0, SCREEN_W - 1);
+  *y = constrain(p.y, 0, SCREEN_H - 1);
+  return true;
 }
 
 static void touch_read(lv_indev_drv_t *indev, lv_indev_data_t *data) {
@@ -79,7 +107,11 @@ static int next_req_id = 1;
 static int pending_req_id = -1;
 static uint32_t pending_since_ms = 0;
 static uint32_t last_ping_ms = 0;
-static uint32_t last_pong_ms = 0;
+// Starts "expired" (now - last_pong_ms already >= PONG_TIMEOUT_MS at boot,
+// via uint32_t wraparound) so the status dot shows disconnected until a real
+// pong is received, instead of reading as falsely connected for the first
+// PONG_TIMEOUT_MS after every boot.
+static uint32_t last_pong_ms = -PONG_TIMEOUT_MS;
 
 static void send_json(JsonDocument &doc) {
   serializeJson(doc, Serial);
@@ -286,6 +318,7 @@ void setup() {
 
   tft.begin();
   tft.setRotation(1);
+  touch_init();
 
   lv_init();
   lv_disp_draw_buf_init(&draw_buf, buf1, NULL, SCREEN_W * 40);
