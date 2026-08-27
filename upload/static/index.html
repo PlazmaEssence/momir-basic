@@ -16,6 +16,7 @@
   <div class="tabs">
     <button id="tab-image-btn" class="tab-btn active" type="button">Image</button>
     <button id="tab-text-btn" class="tab-btn" type="button">Text</button>
+    <button id="tab-qr-btn" class="tab-btn" type="button">QR Code</button>
   </div>
 
   <section id="image-panel" class="panel">
@@ -41,6 +42,14 @@
     <textarea id="text-input" rows="8" maxlength="5000" placeholder="Type or paste text here…"></textarea>
     <button id="text-print-btn" class="primary-btn">Print text</button>
     <div id="text-result" class="print-result"></div>
+  </section>
+
+  <section id="qr-panel" class="panel hidden">
+    <label for="qr-input">Link or text to encode</label>
+    <input id="qr-input" type="text" placeholder="https://example.com">
+    <img id="qr-preview" class="image-preview hidden" alt="QR code preview">
+    <button id="qr-print-btn" class="primary-btn" disabled>Print QR code</button>
+    <div id="qr-result" class="print-result"></div>
   </section>
 </main>
 

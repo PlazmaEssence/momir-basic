@@ -31,19 +31,23 @@ async function refreshStatus() {
 // Tabs
 const tabImageBtn = document.getElementById("tab-image-btn");
 const tabTextBtn = document.getElementById("tab-text-btn");
+const tabQrBtn = document.getElementById("tab-qr-btn");
 const imagePanel = document.getElementById("image-panel");
 const textPanel = document.getElementById("text-panel");
+const qrPanel = document.getElementById("qr-panel");
 
 function showTab(tab) {
-  const isImage = tab === "image";
-  imagePanel.classList.toggle("hidden", !isImage);
-  textPanel.classList.toggle("hidden", isImage);
-  tabImageBtn.classList.toggle("active", isImage);
-  tabTextBtn.classList.toggle("active", !isImage);
+  imagePanel.classList.toggle("hidden", tab !== "image");
+  textPanel.classList.toggle("hidden", tab !== "text");
+  qrPanel.classList.toggle("hidden", tab !== "qr");
+  tabImageBtn.classList.toggle("active", tab === "image");
+  tabTextBtn.classList.toggle("active", tab === "text");
+  tabQrBtn.classList.toggle("active", tab === "qr");
 }
 
 tabImageBtn.addEventListener("click", () => showTab("image"));
 tabTextBtn.addEventListener("click", () => showTab("text"));
+tabQrBtn.addEventListener("click", () => showTab("qr"));
 
 // Image upload
 const imageInput = document.getElementById("image-input");
@@ -114,6 +118,61 @@ textPrintBtn.addEventListener("click", async () => {
     textResult.textContent = `Error: ${e.message}`;
   } finally {
     textPrintBtn.disabled = false;
+  }
+});
+
+// QR code
+const qrInput = document.getElementById("qr-input");
+const qrPreview = document.getElementById("qr-preview");
+const qrPrintBtn = document.getElementById("qr-print-btn");
+const qrResult = document.getElementById("qr-result");
+let qrPreviewTimer = null;
+
+async function updateQrPreview() {
+  const data = qrInput.value.trim();
+  qrResult.textContent = "";
+  if (!data) {
+    qrPreview.classList.add("hidden");
+    qrPrintBtn.disabled = true;
+    return;
+  }
+  try {
+    const { image } = await api("/api/qr/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data }),
+    });
+    qrPreview.src = `data:image/png;base64,${image}`;
+    qrPreview.classList.remove("hidden");
+    qrPrintBtn.disabled = false;
+  } catch (e) {
+    qrPreview.classList.add("hidden");
+    qrPrintBtn.disabled = true;
+    qrResult.textContent = `Error: ${e.message}`;
+  }
+}
+
+qrInput.addEventListener("input", () => {
+  clearTimeout(qrPreviewTimer);
+  qrPreviewTimer = setTimeout(updateQrPreview, 300);
+});
+
+qrPrintBtn.addEventListener("click", async () => {
+  const data = qrInput.value.trim();
+  if (!data) return;
+  qrPrintBtn.disabled = true;
+  qrResult.textContent = "Printing…";
+  try {
+    const result = await api("/api/print/qr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data }),
+    });
+    qrResult.textContent = result.ok ? "Printed." : `Error: ${result.detail}`;
+  } catch (e) {
+    qrResult.textContent = `Error: ${e.message}`;
+  } finally {
+    qrPrintBtn.disabled = false;
   }
 });
 

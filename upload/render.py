@@ -4,6 +4,7 @@ app/printer/render.py uses for cards — so what's printed here comes out the
 same way through the shared print service."""
 from pathlib import Path
 
+import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
 from app.printer.render import FONT_BOLD, FONT_REGULAR, _width_for_paper
@@ -95,3 +96,29 @@ def render_text(text: str, paper_width_mm: float, font_size: str = "medium", bol
         y += body_font.size + 4
 
     return img.convert("1", dither=Image.FLOYDSTEINBERG)
+
+
+def render_qr(data: str, paper_width_mm: float) -> Image.Image:
+    """Renders `data` (typically a URL) as a QR code sized to the paper's
+    pixel width. Picks a whole-pixel module size (box_size) that fits the
+    printable width rather than generating at a fixed size and resizing —
+    resizing a QR code with interpolation blurs module edges and can make it
+    unscannable once dithered/thresholded to monochrome."""
+    width = _width_for_paper(paper_width_mm)
+    content_width = width - 2 * MARGIN
+
+    probe = qrcode.QRCode()
+    probe.add_data(data)
+    probe.make(fit=True)
+    modules = len(probe.get_matrix())
+
+    box_size = max(1, content_width // modules)
+    qr = qrcode.QRCode(box_size=box_size)
+    qr.add_data(data)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("L")
+
+    img = Image.new("L", (width, qr_img.height + 2 * MARGIN), 255)
+    x = max(0, (width - qr_img.width) // 2)
+    img.paste(qr_img, (x, MARGIN))
+    return img.convert("1")

@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
 
-from .render import render_image, render_text
+from .render import render_image, render_qr, render_text
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 PRINTSVC_URL = os.environ.get("MOMIR_PRINTSVC_URL", "http://127.0.0.1:8002")
@@ -29,6 +29,7 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp"}
 MAX_TEXT_CHARS = 5000
 FONT_SIZE_CHOICES = ("small", "medium", "large")
+MAX_QR_CHARS = 800
 
 app = FastAPI(title="Momir Vig Print Upload")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -38,6 +39,10 @@ class TextPrintRequest(BaseModel):
     text: str
     font_size: str = "medium"
     bold_title: bool = False
+
+
+class QrRequest(BaseModel):
+    data: str
 
 
 def _asset_version(filename: str) -> str:
@@ -118,3 +123,25 @@ def print_text(req: TextPrintRequest):
         raise HTTPException(400, f"font_size must be one of {FONT_SIZE_CHOICES}")
     image = render_text(text, _paper_width_mm(), font_size=req.font_size, bold_title=req.bold_title)
     return _send_to_printsvc(image)
+
+
+def _qr_image(data: str) -> Image.Image:
+    data = data.strip()
+    if not data:
+        raise HTTPException(400, "data is required")
+    if len(data) > MAX_QR_CHARS:
+        raise HTTPException(400, f"data too long (max {MAX_QR_CHARS} characters)")
+    return render_qr(data, _paper_width_mm())
+
+
+@app.post("/api/qr/preview")
+def qr_preview(req: QrRequest):
+    image = _qr_image(req.data)
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return {"image": base64.b64encode(buf.getvalue()).decode("ascii")}
+
+
+@app.post("/api/print/qr")
+def print_qr(req: QrRequest):
+    return _send_to_printsvc(_qr_image(req.data))
