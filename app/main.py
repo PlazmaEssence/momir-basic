@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import build_db, card_art, config as config_module, db
+from . import build_db, card_art, config as config_module, db, tokens
 from .printer.render import render_card, render_card_full, render_card_full_preview
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -100,6 +100,16 @@ class PrintRequest(BaseModel):
 
 class RegenerateRequest(BaseModel):
     token: str
+
+
+class TokenPreviewRequest(BaseModel):
+    # Either a curated token's id, or the fields of a one-off custom token.
+    token_id: str | None = None
+    name: str | None = None
+    type_line: str | None = None
+    power: str | None = None
+    toughness: str | None = None
+    text: str | None = None
 
 
 class SettingsUpdate(BaseModel):
@@ -262,6 +272,33 @@ def regenerate(req: RegenerateRequest):
     if pending is None:
         raise HTTPException(404, "nothing pending for that token (summon/preview first)")
     return _build_preview(pending["card"])
+
+
+@app.get("/api/tokens")
+def list_tokens():
+    return {"tokens": tokens.TOKENS}
+
+
+@app.post("/api/tokens/preview")
+def preview_token(req: TokenPreviewRequest):
+    if req.token_id:
+        token = tokens.get_token(req.token_id)
+        if token is None:
+            raise HTTPException(404, "token not found")
+    else:
+        name = (req.name or "").strip()
+        if not name:
+            raise HTTPException(400, "token needs a name")
+        token = {
+            "name": name[:40],
+            "type_line": (req.type_line or "Token").strip()[:60],
+            "power": (req.power or "").strip()[:3],
+            "toughness": (req.toughness or "").strip()[:3],
+            "text": (req.text or "").strip()[:300],
+        }
+    image = tokens.render_token(token, paper_width_mm=_printer_render_config()["paper_width_mm"])
+    # Same pending-token bookkeeping as cards, so the existing /api/print works as-is.
+    return {"token": state.remember(token, image), "card": token, "image": _image_to_data_url(image), "is_token": True}
 
 
 @app.post("/api/print")
