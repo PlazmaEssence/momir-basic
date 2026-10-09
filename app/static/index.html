@@ -76,8 +76,12 @@
     <input id="token-search" type="search" placeholder="Search tokens…" autocomplete="off">
     <div id="token-recent-label" class="token-label hidden">Recent</div>
     <div id="token-recent" class="token-grid"></div>
-    <div class="token-label">All tokens</div>
+    <div id="token-grid-label" class="token-label">Common</div>
     <div id="token-grid" class="token-grid"></div>
+    <div class="token-build">
+      <button id="token-build-btn" type="button">Download full token list</button>
+      <span id="token-build-status"></span>
+    </div>
     <details class="token-custom">
       <summary>Make your own token</summary>
       <form id="token-custom-form">

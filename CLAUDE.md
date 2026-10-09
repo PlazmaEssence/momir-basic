@@ -168,16 +168,33 @@ all four systemd services and a sudoers grant — see the Architecture section b
   used only for the web preview in `_build_preview()` (`app/main.py`) — the token
   stashed in `state.pending` still holds the dithered image, so `/api/print` always
   prints B&W regardless of what the preview showed.
-- `app/tokens.py` — curated list of common Commander tokens (Treasure, Clue,
-  Soldier, ...) plus `render_token()`, a text-only monochrome renderer (bordered
-  box, big name, type line, rules text, P/T) that reuses `app/printer/render.py`'s
-  font/wrap helpers. `POST /api/tokens/preview` takes either a `token_id` or the
-  fields of a one-off custom token and stashes the rendered image in
-  `state.pending` exactly like a summoned card, so the existing `/api/print`
-  prints it — no separate print route. The response carries `is_token: true` so
-  the UI hides Reroll/Regenerate (those assume a summoned card). Recently
-  printed token ids live in the browser's `localStorage` (`momir_token_recent`),
-  not on the server. Custom tokens aren't saved.
+- `app/tokens.py` / `app/build_tokens.py` — the Tokens panel's data and renderer.
+  `tokens.TOKENS` is a hand-curated "Common" starter list (Treasure, Clue,
+  Soldier, ...) that always works offline. `build_tokens.py` builds
+  `data/tokens.json` (gitignored), every distinct paper token/emblem from
+  MTGJSON (~900). MTGJSON has no standalone token file — tokens only exist in
+  each set's own `<CODE>.json.gz` (a `tokens` array) and in the ~180MB
+  AllPrintings — so it reads `SetList.json.gz` (shared with `build_db.py`), fetches
+  the ~337 sets with a `tokenSetCode` one at a time (4 workers, ~40s, ~1MB each),
+  keeps entries whose `types` include Token/Emblem plus a few tracker cards
+  (`MARKER_NAMES`: The Monarch, City's Blessing, ...), and dedupes on
+  name/type/P-T/colors/text, ranking by how many sets printed it. The set files
+  also hold art cards, substitute cards, checklists and ads typed "Card"; those
+  are filtered out. It's on demand, not at startup: `POST /api/tokens/rebuild`
+  (the panel's "Download full token list" button) runs it on a background thread
+  and `GET /api/tokens/build_status` reports progress; or
+  `python3 -m app.build_tokens`. Sets that fail to download are skipped and counted.
+  `tokens.full_tokens()` reloads when the file's mtime changes, so a finished
+  rebuild needs no restart. `GET /api/tokens/search?q=` searches the full list
+  (falling back to the Common list if it hasn't been built).
+  `render_token()` is a text-only monochrome renderer reusing
+  `app/printer/render.py`'s font/wrap helpers. `POST /api/tokens/preview` takes a
+  `token_id` (from either list) or the fields of a one-off custom token and
+  stashes the image in `state.pending` like a summoned card, so the existing
+  `/api/print` prints it. The response carries `is_token: true` so the UI hides
+  Reroll/Regenerate. Recent tokens live in `localStorage` as whole objects
+  (`momir_token_recent_v2`), so they work for any token in the full list;
+  custom tokens aren't saved.
 - `app/static/` — vanilla HTML/CSS/JS, no build step, no CDN dependencies. The `/`
   route in `main.py` does not serve `index.html` as a static file as-is — it injects
   a content-hash query string (`?v=<md5>`) onto the `/static/app.js` and

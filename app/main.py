@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import build_db, card_art, config as config_module, db, tokens
+from . import build_db, build_tokens, card_art, config as config_module, db, tokens
 from .printer.render import render_card, render_card_full, render_card_full_preview
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -276,7 +276,26 @@ def regenerate(req: RegenerateRequest):
 
 @app.get("/api/tokens")
 def list_tokens():
-    return {"tokens": tokens.TOKENS}
+    full = tokens.full_tokens()
+    return {"common": tokens.TOKENS, "full_count": len(full)}
+
+
+@app.get("/api/tokens/search")
+def search_tokens(q: str = ""):
+    return {"results": tokens.search(q)}
+
+
+@app.get("/api/tokens/build_status")
+def token_build_status():
+    return {**build_tokens.STATUS, "full_count": len(tokens.full_tokens())}
+
+
+@app.post("/api/tokens/rebuild")
+def rebuild_tokens():
+    # A few hundred MB of downloads, so run it in the background and let the
+    # UI poll /api/tokens/build_status instead of holding a request open.
+    started = build_tokens.start_background()
+    return {"ok": True, "started": started}
 
 
 @app.post("/api/tokens/preview")

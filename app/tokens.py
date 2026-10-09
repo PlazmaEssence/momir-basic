@@ -3,8 +3,11 @@ Curated list of common Commander tokens plus a renderer that composes one
 token into the same dithered, monochrome PIL image the card renderer produces,
 so it flows through the existing pending-token -> /api/print path unchanged.
 """
+import json
+
 from PIL import Image, ImageDraw
 
+from .build_tokens import TOKENS_PATH
 from .printer.render import FONT_BOLD, FONT_REGULAR, MARGIN, _font, _width_for_paper, _wrap_text
 
 # "colors" is only used for the swatch dots in the web UI; the print is B&W.
@@ -53,9 +56,48 @@ TOKENS = [
 
 _BY_ID = {t["id"]: t for t in TOKENS}
 
+# The full list from MTGJSON (see build_tokens.py), loaded lazily and reloaded
+# when the file changes so a finished rebuild shows up without a restart.
+_full_cache: dict = {"mtime": None, "tokens": [], "by_id": {}}
+
+
+def full_tokens() -> list[dict]:
+    try:
+        mtime = TOKENS_PATH.stat().st_mtime_ns
+    except OSError:
+        return []
+    if _full_cache["mtime"] != mtime:
+        try:
+            tokens = json.loads(TOKENS_PATH.read_text())["tokens"]
+        except (OSError, ValueError, KeyError):
+            return []
+        _full_cache.update(mtime=mtime, tokens=tokens, by_id={t["id"]: t for t in tokens})
+    return _full_cache["tokens"]
+
 
 def get_token(token_id: str) -> dict | None:
-    return _BY_ID.get(token_id)
+    if token_id in _BY_ID:
+        return _BY_ID[token_id]
+    full_tokens()
+    return _full_cache["by_id"].get(token_id)
+
+
+def search(query: str, limit: int = 60) -> list[dict]:
+    """Name/type search over the full list (or the starter list if the full
+    one hasn't been built). Names that start with the query rank first, then
+    by how many sets the token was printed in (a proxy for how common it is)."""
+    corpus = full_tokens() or TOKENS
+    terms = query.lower().split()
+    if not terms:
+        return []
+
+    def haystack(t):
+        return f"{t['name']} {t['type_line']}".lower()
+
+    matches = [t for t in corpus if all(term in haystack(t) for term in terms)]
+    first = terms[0]
+    matches.sort(key=lambda t: (not t["name"].lower().startswith(first), -t.get("printings", 0), t["name"]))
+    return matches[:limit]
 
 
 def _clean_rules(text: str) -> str:

@@ -165,75 +165,117 @@ searchInput.addEventListener("input", () => {
 });
 
 // Tokens
-const TOKEN_RECENT_KEY = "momir_token_recent";
+const TOKEN_RECENT_KEY = "momir_token_recent_v2";
 const MAX_RECENT_TOKENS = 3;
+const MAX_TOKEN_RESULTS = 60;
 const tokenSearch = document.getElementById("token-search");
 const tokenGrid = document.getElementById("token-grid");
+const tokenGridLabel = document.getElementById("token-grid-label");
 const tokenRecentEl = document.getElementById("token-recent");
 const tokenRecentLabel = document.getElementById("token-recent-label");
-let allTokens = [];
-let recentTokenIds = [];
+const tokenBuildBtn = document.getElementById("token-build-btn");
+const tokenBuildStatus = document.getElementById("token-build-status");
+let commonTokens = [];
+let fullTokenCount = 0;
+let recentTokens = []; // whole token objects, so a recent works for any token in the full list
 let selectedTokenId = null;
+let tokenSearchDebounce = null;
 
 try {
-  recentTokenIds = JSON.parse(localStorage.getItem(TOKEN_RECENT_KEY)) || [];
+  recentTokens = JSON.parse(localStorage.getItem(TOKEN_RECENT_KEY)) || [];
 } catch (e) {
-  recentTokenIds = [];
+  recentTokens = [];
+}
+
+function tokenSubtitle(t) {
+  const pt = t.power && t.toughness ? `${t.power}/${t.toughness}` : "";
+  const kind = t.type_line.replace(/^Token /, "");
+  const text = (t.text || "").replace(/\s+/g, " ");
+  const snippet = text.length > 48 ? `${text.slice(0, 47)}…` : text;
+  return [pt, kind, snippet].filter(Boolean).join(" · ");
 }
 
 function tokenTile(t) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "token-tile" + (t.id === selectedTokenId ? " token-tile--on" : "");
-  const pt = t.power && t.toughness ? `${t.power}/${t.toughness} · ` : "";
   btn.innerHTML =
     `<span class="token-name"></span><span class="token-sub"></span>` +
     `<span class="token-dots">${(t.colors || []).map((c) => `<i class="dot dot--${c}"></i>`).join("")}</span>`;
   btn.querySelector(".token-name").textContent = t.name;
-  btn.querySelector(".token-sub").textContent = pt + t.type_line.replace(/^Token /, "");
-  btn.addEventListener("click", () => previewToken(t.id));
+  btn.querySelector(".token-sub").textContent = tokenSubtitle(t);
+  btn.addEventListener("click", () => previewToken(t));
   return btn;
 }
 
-function renderTokens() {
-  const q = tokenSearch.value.trim().toLowerCase();
-  tokenGrid.innerHTML = "";
-  allTokens.filter((t) => t.name.toLowerCase().includes(q)).forEach((t) => tokenGrid.appendChild(tokenTile(t)));
-  tokenRecentEl.innerHTML = "";
-  const recent = recentTokenIds.map((id) => allTokens.find((t) => t.id === id)).filter(Boolean);
-  recent.forEach((t) => tokenRecentEl.appendChild(tokenTile(t)));
-  tokenRecentLabel.classList.toggle("hidden", recent.length === 0 || !!q);
-  tokenRecentEl.classList.toggle("hidden", recent.length === 0 || !!q);
+function fillGrid(el, list) {
+  el.innerHTML = "";
+  list.forEach((t) => el.appendChild(tokenTile(t)));
 }
 
-function rememberToken(id) {
-  recentTokenIds = [id, ...recentTokenIds.filter((x) => x !== id)].slice(0, MAX_RECENT_TOKENS);
+function renderTokenRecent(searching) {
+  fillGrid(tokenRecentEl, recentTokens);
+  const show = recentTokens.length > 0 && !searching;
+  tokenRecentLabel.classList.toggle("hidden", !show);
+  tokenRecentEl.classList.toggle("hidden", !show);
+}
+
+function renderCommonTokens() {
+  tokenGridLabel.textContent = fullTokenCount ? `Common (search all ${fullTokenCount} tokens above)` : "Common";
+  fillGrid(tokenGrid, commonTokens);
+  renderTokenRecent(false);
+}
+
+async function runTokenSearch() {
+  const q = tokenSearch.value.trim();
+  if (!q) {
+    renderCommonTokens();
+    return;
+  }
   try {
-    localStorage.setItem(TOKEN_RECENT_KEY, JSON.stringify(recentTokenIds));
+    const { results } = await api(`/api/tokens/search?q=${encodeURIComponent(q)}`);
+    if (tokenSearch.value.trim() !== q) return; // a newer search superseded this one
+    tokenGridLabel.textContent =
+      results.length === 0
+        ? "No tokens match"
+        : `${results.length}${results.length >= MAX_TOKEN_RESULTS ? "+" : ""} match${results.length === 1 ? "" : "es"}`;
+    fillGrid(tokenGrid, results);
+    renderTokenRecent(true);
+  } catch (e) {
+    tokenGridLabel.textContent = `Error: ${e.message}`;
+  }
+}
+
+function rememberToken(t) {
+  recentTokens = [t, ...recentTokens.filter((x) => x.id !== t.id)].slice(0, MAX_RECENT_TOKENS);
+  try {
+    localStorage.setItem(TOKEN_RECENT_KEY, JSON.stringify(recentTokens));
   } catch (e) {
     // recents are a convenience only
   }
 }
 
-async function previewToken(id) {
-  selectedTokenId = id;
-  rememberToken(id);
-  renderTokens();
+async function previewToken(t) {
+  selectedTokenId = t.id;
+  rememberToken(t);
   previewPanel.classList.remove("hidden");
   previewMeta.textContent = "Preparing token…";
   try {
-    showPreview(await api("/api/tokens/preview", { method: "POST", body: JSON.stringify({ token_id: id }) }));
+    showPreview(await api("/api/tokens/preview", { method: "POST", body: JSON.stringify({ token_id: t.id }) }));
   } catch (e) {
     previewMeta.textContent = `Error: ${e.message}`;
   }
+  runTokenSearch();
 }
 
-tokenSearch.addEventListener("input", renderTokens);
+tokenSearch.addEventListener("input", () => {
+  clearTimeout(tokenSearchDebounce);
+  tokenSearchDebounce = setTimeout(runTokenSearch, 200);
+});
 
 document.getElementById("token-custom-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   selectedTokenId = null;
-  renderTokens();
   previewPanel.classList.remove("hidden");
   previewMeta.textContent = "Preparing token…";
   try {
@@ -254,13 +296,62 @@ document.getElementById("token-custom-form").addEventListener("submit", async (e
   }
 });
 
+function showTokenBuildState(status) {
+  if (status.running) {
+    tokenBuildBtn.disabled = true;
+    tokenBuildStatus.textContent = `Downloading… ${status.done}/${status.total} sets`;
+  } else {
+    tokenBuildBtn.disabled = false;
+    tokenBuildBtn.textContent = fullTokenCount ? "Update token list" : "Download full token list";
+    tokenBuildStatus.textContent = status.error
+      ? `Error: ${status.error}`
+      : fullTokenCount
+        ? `${fullTokenCount} tokens available.`
+        : "Only the common tokens are available. Download the full list to search every token.";
+  }
+}
+
+let tokenBuildPoll = null;
+async function pollTokenBuild() {
+  try {
+    const status = await api("/api/tokens/build_status");
+    const wasEmpty = fullTokenCount === 0;
+    fullTokenCount = status.full_count;
+    showTokenBuildState(status);
+    if (status.running) {
+      tokenBuildPoll = setTimeout(pollTokenBuild, 1500);
+    } else if (wasEmpty && fullTokenCount) {
+      renderCommonTokens();
+    }
+  } catch (e) {
+    tokenBuildStatus.textContent = `Error: ${e.message}`;
+    tokenBuildBtn.disabled = false;
+  }
+}
+
+tokenBuildBtn.addEventListener("click", async () => {
+  tokenBuildBtn.disabled = true;
+  try {
+    await api("/api/tokens/rebuild", { method: "POST" });
+  } catch (e) {
+    tokenBuildStatus.textContent = `Error: ${e.message}`;
+    tokenBuildBtn.disabled = false;
+    return;
+  }
+  clearTimeout(tokenBuildPoll);
+  pollTokenBuild();
+});
+
 async function loadTokens() {
   try {
-    allTokens = (await api("/api/tokens")).tokens;
+    const data = await api("/api/tokens");
+    commonTokens = data.common;
+    fullTokenCount = data.full_count;
   } catch (e) {
-    allTokens = [];
+    commonTokens = [];
   }
-  renderTokens();
+  renderCommonTokens();
+  pollTokenBuild();
 }
 
 // Settings
