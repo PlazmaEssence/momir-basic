@@ -195,6 +195,18 @@ all four systemd services and a sudoers grant — see the Architecture section b
   Reroll/Regenerate. Recent tokens live in `localStorage` as whole objects
   (`momir_token_recent_v2`), so they work for any token in the full list;
   custom tokens aren't saved.
+  Art: each full-list token keeps the `scryfall_id` (and `face`, front/back, since
+  double-faced tokens share one Scryfall card) of its newest printing — the builder
+  walks sets newest-first, so the first sighting wins. `card_art.fetch_token_art()`
+  gets the art crop in one request to Scryfall's `/cards/<id>?format=image`
+  (it redirects straight to the image), caches it in `data/art_cache/` as
+  `token_<id>[_back]`, and returns None on any failure, so offline just prints
+  without art. It honors the same "Fetch card art" setting as cards. The Common
+  list and custom tokens carry no id: `tokens.art_source()` borrows the
+  most-printed full-list token with the same name and power/toughness, and a custom
+  token with no match prints text-only. `render_token()` crops the art to
+  `ART_ASPECT` and autocontrasts it before the final dither. A token list built
+  before this (schema 1) has no ids and needs a rebuild to get art.
 - `app/static/` — vanilla HTML/CSS/JS, no build step, no CDN dependencies. The `/`
   route in `main.py` does not serve `index.html` as a static file as-is — it injects
   a content-hash query string (`?v=<md5>`) onto the `/static/app.js` and

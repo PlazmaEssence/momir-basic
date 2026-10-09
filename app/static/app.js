@@ -48,7 +48,7 @@ function showPreview(result) {
       : "";
   const isToken = !!result.is_token;
   previewMeta.textContent = isToken
-    ? c.type_line || ""
+    ? `${c.type_line || ""}${result.art_wanted && !result.art_used ? " · art unavailable" : ""}`
     : `${c.type_line || ""}${cmcNote}${result.art_used ? "" : " · no art available"}`;
   // Reroll/Regenerate only make sense for summoned cards, not tokens.
   document.getElementById("reroll-btn").classList.toggle("hidden", isToken);

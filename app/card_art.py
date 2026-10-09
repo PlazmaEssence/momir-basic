@@ -102,3 +102,38 @@ def fetch_art(name: str, scryfall_oracle_id: str | None = None, image_size: str 
     except requests.RequestException as e:
         print(f"  [card_art] couldn't fetch art for '{name}': {e}")
         return None
+
+
+def fetch_token_art(scryfall_id: str, face: str = "front") -> Path | None:
+    """Art for a token (or any card) by Scryfall id, cached like fetch_art().
+    One request: Scryfall's `?format=image` endpoint redirects straight to the
+    image, so there's no JSON lookup first. `face="back"` picks the back of a
+    double-faced card. Returns None if unavailable — never raises."""
+    if not scryfall_id:
+        return None
+    ART_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    key = f"token_{scryfall_id}" + ("_back" if face == "back" else "")
+    for ext in (".jpg", ".png"):
+        cached = ART_CACHE_DIR / f"{key}{ext}"
+        if cached.exists():
+            return cached
+
+    params = {"format": "image", "version": IMAGE_SIZE}
+    if face == "back":
+        params["face"] = "back"
+    try:
+        resp = requests.get(
+            f"https://api.scryfall.com/cards/{scryfall_id}",
+            params=params,
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        ext = ".png" if "png" in resp.headers.get("Content-Type", "") else ".jpg"
+        dest = ART_CACHE_DIR / f"{key}{ext}"
+        dest.write_bytes(resp.content)
+        time.sleep(0.05)  # be polite to Scryfall's rate limit
+        return dest
+    except requests.RequestException as e:
+        print(f"  [card_art] couldn't fetch token art for {scryfall_id}: {e}")
+        return None
