@@ -417,3 +417,17 @@ details summary {
 }
 
 .token-pt { display: flex; align-items: center; gap: 0.5rem; }
+
+.token-build {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+#token-build-btn { width: 100%; }
+
+#token-build-status {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
