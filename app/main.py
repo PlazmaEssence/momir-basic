@@ -315,9 +315,20 @@ def preview_token(req: TokenPreviewRequest):
             "toughness": (req.toughness or "").strip()[:3],
             "text": (req.text or "").strip()[:300],
         }
-    image = tokens.render_token(token, paper_width_mm=_printer_render_config()["paper_width_mm"])
+    art_path = None
+    source = tokens.art_source(token) if state.art_config.get("enabled", True) else None
+    if source:
+        art_path = card_art.fetch_token_art(*source)
+    image = tokens.render_token(token, paper_width_mm=_printer_render_config()["paper_width_mm"], art_path=art_path)
     # Same pending-token bookkeeping as cards, so the existing /api/print works as-is.
-    return {"token": state.remember(token, image), "card": token, "image": _image_to_data_url(image), "is_token": True}
+    return {
+        "token": state.remember(token, image),
+        "card": token,
+        "image": _image_to_data_url(image),
+        "is_token": True,
+        "art_used": art_path is not None,
+        "art_wanted": source is not None,
+    }
 
 
 @app.post("/api/print")

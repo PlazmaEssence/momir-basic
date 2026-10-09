@@ -28,7 +28,7 @@ from . import build_db
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TOKENS_PATH = DATA_DIR / "tokens.json"
 SET_URL = "https://mtgjson.com/api/v5/{code}.json.gz"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 WORKERS = 4
 
 # Shared progress for the UI to poll while a background build runs.
@@ -71,6 +71,10 @@ def _normalize(raw: dict) -> dict | None:
         "toughness": raw.get("toughness") or "",
         "text": (raw.get("text") or "").strip(),
         "colors": raw.get("colors") or [],
+        # Scryfall id of this printing, for fetching art (see card_art.fetch_token_art).
+        # Double-faced tokens share one Scryfall card, so remember which face this is.
+        "scryfall_id": (raw.get("identifiers") or {}).get("scryfallId") or "",
+        "face": "back" if raw.get("side") == "b" else "front",
     }
 
 
@@ -84,7 +88,11 @@ def _token_set_codes(progress) -> list[str]:
     with gzip.open(build_db.SETLIST_PATH, "rt", encoding="utf-8") as f:
         sets = json.load(f)["data"]
     # tokenSetCode marks sets that have tokens; skip Arena/MTGO-only sets.
-    return sorted(s["code"] for s in sets if s.get("tokenSetCode") and not s.get("isOnlineOnly"))
+    # Newest first: the first printing we see for a token supplies its art, so
+    # this picks the most recent illustration.
+    wanted = [s for s in sets if s.get("tokenSetCode") and not s.get("isOnlineOnly")]
+    wanted.sort(key=lambda s: s.get("releaseDate") or "", reverse=True)
+    return [s["code"] for s in wanted]
 
 
 def build_tokens(path: Path = TOKENS_PATH, progress=print) -> dict:
@@ -109,6 +117,8 @@ def build_tokens(path: Path = TOKENS_PATH, progress=print) -> dict:
                     continue
                 entry = merged.setdefault(_key(t), {**t, "printings": 0})
                 entry["printings"] += 1
+                if not entry["scryfall_id"] and t["scryfall_id"]:
+                    entry["scryfall_id"], entry["face"] = t["scryfall_id"], t["face"]
             with _lock:
                 STATUS["done"] += 1
                 STATUS["skipped"] = skipped

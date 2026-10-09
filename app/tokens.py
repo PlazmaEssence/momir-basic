@@ -5,7 +5,9 @@ so it flows through the existing pending-token -> /api/print path unchanged.
 """
 import json
 
-from PIL import Image, ImageDraw
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageOps
 
 from .build_tokens import TOKENS_PATH
 from .printer.render import FONT_BOLD, FONT_REGULAR, MARGIN, _font, _width_for_paper, _wrap_text
@@ -82,6 +84,19 @@ def get_token(token_id: str) -> dict | None:
     return _full_cache["by_id"].get(token_id)
 
 
+def art_source(token: dict) -> tuple[str, str] | None:
+    """(scryfall_id, face) to fetch this token's art from, or None. The
+    curated Common tokens carry no id of their own, so borrow the most-printed
+    full-list token with the same name and stats."""
+    if token.get("scryfall_id"):
+        return token["scryfall_id"], token.get("face", "front")
+    for t in full_tokens():  # already sorted most-printed first
+        if (t["name"], t["power"], t["toughness"]) == (token["name"], token.get("power", ""), token.get("toughness", "")) \
+                and t.get("scryfall_id") and t["type_line"].startswith("Token"):
+            return t["scryfall_id"], t.get("face", "front")
+    return None
+
+
 def search(query: str, limit: int = 60) -> list[dict]:
     """Name/type search over the full list (or the starter list if the full
     one hasn't been built). Names that start with the query rank first, then
@@ -106,7 +121,25 @@ def _clean_rules(text: str) -> str:
     return text.replace("{T}", "Tap").replace("{", "").replace("}", "")
 
 
-def render_token(token: dict, paper_width_mm: float = 80) -> Image.Image:
+ART_ASPECT = 0.6  # art height / width; Scryfall's art crop is ~0.73, trimmed to save paper
+
+
+def _load_art(art_path: Path | None, width: int) -> Image.Image | None:
+    if not art_path or not Path(art_path).exists():
+        return None
+    try:
+        art = Image.open(art_path).convert("L")
+        target_h = int(width * ART_ASPECT)
+        scaled_h = int(art.height * (width / art.width))
+        art = art.resize((width, scaled_h), Image.LANCZOS)
+        top = max(0, (scaled_h - target_h) // 2)
+        art = art.crop((0, top, width, top + min(target_h, scaled_h)))
+        return ImageOps.autocontrast(art, cutoff=1)  # thermal dithering likes punchy contrast
+    except Exception:
+        return None
+
+
+def render_token(token: dict, paper_width_mm: float = 80, art_path: Path | None = None) -> Image.Image:
     width = _width_for_paper(paper_width_mm)
     inner = width - 2 * MARGIN
     pad = 14
@@ -141,7 +174,9 @@ def render_token(token: dict, paper_width_mm: float = 80) -> Image.Image:
     type_h = (type_font.size + 4) * len(type_lines) + gap
     text_h = (text_font.size + 4) * len(text_lines) + gap if text_lines else 0
     pt_h = pt_font.size + gap * 2 if has_pt else 0
-    box_h = pad + label_h + name_h + type_h + text_h + pt_h + pad
+    art = _load_art(art_path, inner - 2 * pad)
+    art_h = art.height + gap if art else 0
+    box_h = pad + label_h + name_h + art_h + type_h + text_h + pt_h + pad
 
     img = Image.new("L", (width, box_h + 2 * MARGIN), 255)
     draw = ImageDraw.Draw(img)
@@ -157,6 +192,10 @@ def render_token(token: dict, paper_width_mm: float = 80) -> Image.Image:
         y += name_font.size + 4
     y += gap * 2
     draw.line([(x, y - gap), (width - MARGIN - pad, y - gap)], fill=0, width=2)
+
+    if art:
+        img.paste(art, (x, y))
+        y += art_h
 
     for line in type_lines:
         draw.text((x, y), line, font=type_font, fill=0)
