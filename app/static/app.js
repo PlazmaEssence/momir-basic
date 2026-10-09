@@ -46,7 +46,13 @@ function showPreview(result) {
     result.card.actual_cmc !== result.card.requested_cmc
       ? ` (nothing at MV ${result.card.requested_cmc}, showing MV ${result.card.actual_cmc})`
       : "";
-  previewMeta.textContent = `${c.type_line || ""}${cmcNote}${result.art_used ? "" : " · no art available"}`;
+  const isToken = !!result.is_token;
+  previewMeta.textContent = isToken
+    ? c.type_line || ""
+    : `${c.type_line || ""}${cmcNote}${result.art_used ? "" : " · no art available"}`;
+  // Reroll/Regenerate only make sense for summoned cards, not tokens.
+  document.getElementById("reroll-btn").classList.toggle("hidden", isToken);
+  document.getElementById("regenerate-btn").classList.toggle("hidden", isToken);
   printResult.textContent = "";
   previewPanel.classList.remove("hidden");
   previewPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -158,6 +164,105 @@ searchInput.addEventListener("input", () => {
   }, 250);
 });
 
+// Tokens
+const TOKEN_RECENT_KEY = "momir_token_recent";
+const MAX_RECENT_TOKENS = 3;
+const tokenSearch = document.getElementById("token-search");
+const tokenGrid = document.getElementById("token-grid");
+const tokenRecentEl = document.getElementById("token-recent");
+const tokenRecentLabel = document.getElementById("token-recent-label");
+let allTokens = [];
+let recentTokenIds = [];
+let selectedTokenId = null;
+
+try {
+  recentTokenIds = JSON.parse(localStorage.getItem(TOKEN_RECENT_KEY)) || [];
+} catch (e) {
+  recentTokenIds = [];
+}
+
+function tokenTile(t) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "token-tile" + (t.id === selectedTokenId ? " token-tile--on" : "");
+  const pt = t.power && t.toughness ? `${t.power}/${t.toughness} · ` : "";
+  btn.innerHTML =
+    `<span class="token-name"></span><span class="token-sub"></span>` +
+    `<span class="token-dots">${(t.colors || []).map((c) => `<i class="dot dot--${c}"></i>`).join("")}</span>`;
+  btn.querySelector(".token-name").textContent = t.name;
+  btn.querySelector(".token-sub").textContent = pt + t.type_line.replace(/^Token /, "");
+  btn.addEventListener("click", () => previewToken(t.id));
+  return btn;
+}
+
+function renderTokens() {
+  const q = tokenSearch.value.trim().toLowerCase();
+  tokenGrid.innerHTML = "";
+  allTokens.filter((t) => t.name.toLowerCase().includes(q)).forEach((t) => tokenGrid.appendChild(tokenTile(t)));
+  tokenRecentEl.innerHTML = "";
+  const recent = recentTokenIds.map((id) => allTokens.find((t) => t.id === id)).filter(Boolean);
+  recent.forEach((t) => tokenRecentEl.appendChild(tokenTile(t)));
+  tokenRecentLabel.classList.toggle("hidden", recent.length === 0 || !!q);
+  tokenRecentEl.classList.toggle("hidden", recent.length === 0 || !!q);
+}
+
+function rememberToken(id) {
+  recentTokenIds = [id, ...recentTokenIds.filter((x) => x !== id)].slice(0, MAX_RECENT_TOKENS);
+  try {
+    localStorage.setItem(TOKEN_RECENT_KEY, JSON.stringify(recentTokenIds));
+  } catch (e) {
+    // recents are a convenience only
+  }
+}
+
+async function previewToken(id) {
+  selectedTokenId = id;
+  rememberToken(id);
+  renderTokens();
+  previewPanel.classList.remove("hidden");
+  previewMeta.textContent = "Preparing token…";
+  try {
+    showPreview(await api("/api/tokens/preview", { method: "POST", body: JSON.stringify({ token_id: id }) }));
+  } catch (e) {
+    previewMeta.textContent = `Error: ${e.message}`;
+  }
+}
+
+tokenSearch.addEventListener("input", renderTokens);
+
+document.getElementById("token-custom-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  selectedTokenId = null;
+  renderTokens();
+  previewPanel.classList.remove("hidden");
+  previewMeta.textContent = "Preparing token…";
+  try {
+    showPreview(
+      await api("/api/tokens/preview", {
+        method: "POST",
+        body: JSON.stringify({
+          name: document.getElementById("tc-name").value,
+          type_line: document.getElementById("tc-type").value,
+          power: document.getElementById("tc-power").value,
+          toughness: document.getElementById("tc-toughness").value,
+          text: document.getElementById("tc-text").value,
+        }),
+      })
+    );
+  } catch (e) {
+    previewMeta.textContent = `Error: ${e.message}`;
+  }
+});
+
+async function loadTokens() {
+  try {
+    allTokens = (await api("/api/tokens")).tokens;
+  } catch (e) {
+    allTokens = [];
+  }
+  renderTokens();
+}
+
 // Settings
 const settingsForm = document.getElementById("settings-form");
 const settingsResult = document.getElementById("settings-result");
@@ -218,6 +323,7 @@ rebuildDbBtn.addEventListener("click", async () => {
 refreshStatus();
 loadSettings();
 loadCmcCounts();
+loadTokens();
 setInterval(refreshStatus, 15000);
 
 // Life / hand / land tracker (client-side only, no deck needed)

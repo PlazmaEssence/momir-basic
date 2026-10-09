@@ -168,6 +168,16 @@ all four systemd services and a sudoers grant — see the Architecture section b
   used only for the web preview in `_build_preview()` (`app/main.py`) — the token
   stashed in `state.pending` still holds the dithered image, so `/api/print` always
   prints B&W regardless of what the preview showed.
+- `app/tokens.py` — curated list of common Commander tokens (Treasure, Clue,
+  Soldier, ...) plus `render_token()`, a text-only monochrome renderer (bordered
+  box, big name, type line, rules text, P/T) that reuses `app/printer/render.py`'s
+  font/wrap helpers. `POST /api/tokens/preview` takes either a `token_id` or the
+  fields of a one-off custom token and stashes the rendered image in
+  `state.pending` exactly like a summoned card, so the existing `/api/print`
+  prints it — no separate print route. The response carries `is_token: true` so
+  the UI hides Reroll/Regenerate (those assume a summoned card). Recently
+  printed token ids live in the browser's `localStorage` (`momir_token_recent`),
+  not on the server. Custom tokens aren't saved.
 - `app/static/` — vanilla HTML/CSS/JS, no build step, no CDN dependencies. The `/`
   route in `main.py` does not serve `index.html` as a static file as-is — it injects
   a content-hash query string (`?v=<md5>`) onto the `/static/app.js` and

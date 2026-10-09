@@ -71,6 +71,29 @@
     <div id="print-result" class="print-result"></div>
   </section>
 
+  <details class="token-panel">
+    <summary>Tokens</summary>
+    <input id="token-search" type="search" placeholder="Search tokens…" autocomplete="off">
+    <div id="token-recent-label" class="token-label hidden">Recent</div>
+    <div id="token-recent" class="token-grid"></div>
+    <div class="token-label">All tokens</div>
+    <div id="token-grid" class="token-grid"></div>
+    <details class="token-custom">
+      <summary>Make your own token</summary>
+      <form id="token-custom-form">
+        <input id="tc-name" type="text" placeholder="Name (e.g. Cat)" maxlength="40" required>
+        <input id="tc-type" type="text" placeholder="Type line (e.g. Token Creature — Cat)" maxlength="60">
+        <div class="token-pt">
+          <input id="tc-power" type="text" placeholder="Power" maxlength="3" inputmode="numeric">
+          <span>/</span>
+          <input id="tc-toughness" type="text" placeholder="Toughness" maxlength="3" inputmode="numeric">
+        </div>
+        <textarea id="tc-text" placeholder="Rules text (optional)" maxlength="300" rows="2"></textarea>
+        <button type="submit">Preview</button>
+      </form>
+    </details>
+  </details>
+
   <details class="search-panel">
     <summary>Search &amp; print a specific card</summary>
     <input id="search-input" type="search" placeholder="Card name…" autocomplete="off">
